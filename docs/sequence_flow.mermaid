@@ -1,0 +1,51 @@
+sequenceDiagram
+    participant Client
+    participant Proxy (Server)
+    participant Pipeline
+    participant Database (Reservations)
+    participant Upstream MCP
+    
+    Client->>Proxy: POST /mcp/:tenant/:server (Action)
+    Proxy->>Pipeline: Run(Context)
+    
+    rect rgb(200, 220, 240)
+        Note over Pipeline: 1. Parse/Validate
+        Pipeline->>Pipeline: Check Auth Header
+        Pipeline->>Pipeline: Validate JSON Body
+    end
+    
+    rect rgb(200, 220, 240)
+        Note over Pipeline: 2. Normalize
+        Pipeline->>Pipeline: Create ActionEnvelope (v0.1.0)
+    end
+    
+    rect rgb(200, 220, 240)
+        Note over Pipeline: 3. Policy
+        Pipeline->>Pipeline: Check Allow/Deny
+    end
+    
+    rect rgb(200, 220, 240)
+        Note over Pipeline: 4. Economic
+        Pipeline->>Database: Create Reservation
+        Database-->>Pipeline: Reservation ID
+    end
+    
+    rect rgb(200, 220, 240)
+        Note over Pipeline: 5. Forward
+        Pipeline->>Upstream MCP: Execute Action
+        Upstream MCP-->>Pipeline: Result Payload
+    end
+    
+    rect rgb(200, 220, 240)
+        Note over Pipeline: 6. Capture
+        Pipeline->>Pipeline: Store Upstream Result
+    end
+    
+    rect rgb(200, 220, 240)
+        Note over Pipeline: 7. Receipt
+        Pipeline->>Database: Commit Reservation
+        Pipeline->>Pipeline: Generate Receipt
+    end
+    
+    Pipeline-->>Proxy: Return Receipt
+    Proxy-->>Client: 200 OK (Receipt JSON)

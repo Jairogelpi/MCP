@@ -1,0 +1,74 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://mcp-financiero.internal/schemas/action-envelope.v0.1.0.json",
+    "title": "ActionEnvelope",
+    "description": "The atomic unit of work for mcp_financiero interceptor pipeline.",
+    "type": "object",
+    "required": [
+        "id",
+        "version",
+        "type",
+        "action",
+        "parameters",
+        "meta"
+    ],
+    "properties": {
+        "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this action execution (Trace ID)."
+        },
+        "version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$",
+            "description": "Schema version of this envelope (e.g. 0.1.0)"
+        },
+        "type": {
+            "type": "string",
+            "enum": [
+                "command",
+                "query"
+            ],
+            "description": "Nature of the request."
+        },
+        "action": {
+            "type": "string",
+            "description": "Name of the tool/resource being accessed (e.g. 'get_balance', 'transfer')."
+        },
+        "parameters": {
+            "type": "object",
+            "description": "Input arguments for the action."
+        },
+        "meta": {
+            "type": "object",
+            "required": [
+                "timestamp",
+                "source",
+                "tenant",
+                "targetServer"
+            ],
+            "properties": {
+                "timestamp": {
+                    "type": "integer",
+                    "description": "Unix timestamp (ms) of entry."
+                },
+                "source": {
+                    "type": "string",
+                    "description": "Client identifier or origin IP."
+                },
+                "tenant": {
+                    "type": "string",
+                    "description": "Tenant ID derived from route."
+                },
+                "targetServer": {
+                    "type": "string",
+                    "description": "Target MCP server derived from route."
+                },
+                "authContext": {
+                    "type": "object",
+                    "description": "Decoded authentication info (e.g. user_id, roles)."
+                }
+            }
+        }
+    }
+}
