@@ -1,0 +1,99 @@
+{
+    "tenant_id": "acme",
+    "version": "1.1.0",
+    "created_at": 1770934000000,
+    "rules": [
+        {
+            "id": "allow-basic",
+            "name": "Allow Basic Tools",
+            "effect": "allow",
+            "priority": 10,
+            "when": {
+                "tool_name": "valid_tool"
+            }
+        },
+        {
+            "id": "allow-stream",
+            "name": "Allow Streaming",
+            "effect": "allow",
+            "priority": 10,
+            "when": {
+                "tool_name": "stream_test"
+            }
+        },
+        {
+            "id": "admin-dangerous",
+            "name": "Admins can do dangerous things",
+            "effect": "allow",
+            "priority": 50,
+            "when": {
+                "tool_name": "dangerous_op",
+                "role": [
+                    "admin"
+                ]
+            }
+        },
+        {
+            "id": "allow-expensive",
+            "name": "Allow Expensive Op (for Econ testing)",
+            "effect": "allow",
+            "priority": 50,
+            "when": {
+                "tool_name": "expensive_op"
+            }
+        },
+        {
+            "id": "redact-pii",
+            "name": "Redact PII always",
+            "effect": "transform",
+            "priority": 100,
+            "when": {
+                "tool_name": "sensitive_op"
+            },
+            "transform": {
+                "redactPII": [
+                    "credit_card",
+                    "ssn"
+                ]
+            }
+        },
+        {
+            "id": "limit-search",
+            "name": "Enforce search limits",
+            "effect": "transform",
+            "priority": 80,
+            "when": {
+                "tool_name": "search_op"
+            },
+            "transform": {
+                "forceArgs": {
+                    "limit": 10
+                }
+            }
+        },
+        {
+            "id": "egress-control",
+            "name": "Block SSRF on curl",
+            "effect": "transform",
+            "priority": 90,
+            "when": {
+                "tool_name": "curl_op"
+            },
+            "transform": {
+                "checkEgress": {
+                    "blockPrivate": true,
+                    "allowList": [
+                        "example.com"
+                    ]
+                }
+            }
+        },
+        {
+            "id": "default-deny",
+            "name": "Default Deny All",
+            "effect": "deny",
+            "priority": 0,
+            "when": {}
+        }
+    ]
+}

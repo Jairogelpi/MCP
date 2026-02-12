@@ -49,21 +49,6 @@ export enum PolicyReasonCodes {
     ALLOWED_BY_RULE = 'ALLOWED_BY_RULE'
 }
 
-export interface PolicyInput {
-    tenant_id: string;
-    project_id?: string;
-    agent_id: string;
-    session_id?: string;
-    upstream_server_id: string;
-    mcp_method?: string;
-    tool_name: string;
-    args: any;
-    input_schema_hash?: string;
-    risk_class?: string;
-    timestamp: number;
-    request_id: string;
-}
-
 export type RuleEffect = 'allow' | 'deny' | 'transform';
 
 export interface PolicyConditions {
@@ -82,6 +67,7 @@ export interface PolicyTransform {
     };
 }
 
+// Legacy Rule Interface (for backward compat if needed, or remove)
 export interface PolicyRule {
     id: string;
     description?: string;
@@ -96,10 +82,50 @@ export interface PolicyRule {
     priority?: number;
 }
 
+// --- ABAC NEW TYPES ---
+
+export interface ABACRule {
+    id: string;
+    name: string;
+    effect: RuleEffect;
+    priority: number;
+    when: {
+        tool_name?: string | { pattern: string };
+        role?: string[];
+        risk_class?: 'low' | 'medium' | 'high';
+        time_restricted?: { start: string; end: string }; // HH:MM (24h)
+        [key: string]: any;
+    };
+    transform?: PolicyTransform;
+}
+
+export interface PolicyRuleset {
+    tenant_id: string;
+    version: string;
+    created_at: number;
+    rules: ABACRule[];
+}
+
+export interface PolicyInput {
+    tenant_id: string;
+    project_id?: string;
+    agent_id: string;
+    role?: string; // Added for ABAC
+    session_id?: string;
+    upstream_server_id: string;
+    mcp_method?: string;
+    tool_name: string;
+    args: any;
+    input_schema_hash?: string;
+    risk_class?: string;
+    timestamp: number;
+    request_id: string;
+}
+
 export interface PolicyDecision {
     decision: RuleEffect;
     reason_codes: string[]; // Minimum 1
-    transform_patch?: any;
+    transform_patch?: any; // Generic patch
     obligations?: string[];
 
     allow?: boolean;
@@ -130,7 +156,7 @@ export interface Receipt {
         code: string;
         message: string;
     };
-    details?: UpstreamResponse;
+    details?: Partial<UpstreamResponse> & { economic?: any }; // Allow economic details
     cost: number;
     timestamp: number;
 }
@@ -142,7 +168,13 @@ export interface PipelineContext {
         raw?: any;
         normalized?: ActionEnvelope;
         policy?: PolicyDecision;
-        reservation?: EconomicReservation;
+        reservation?: EconomicReservation; // Deprecated but kept for compatibility if needed
+        economic?: {
+            cost: number;
+            currency: string;
+            reserve_id?: string;
+            budget_scopes?: string[];
+        }; // New field
         upstream?: UpstreamResponse;
         receipt?: Receipt;
         error?: {

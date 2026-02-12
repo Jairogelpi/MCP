@@ -1,0 +1,29 @@
+version: "0.1.0"
+rules:
+  # 1. Downgrade GPT-4 to GPT-3.5 if Soft Limit exceeded
+  - id: "downgrade_gpt4_soft"
+    condition:
+      trigger: "soft_limit"
+      provider: "openai"
+      model: "gpt-4"
+    action:
+      type: "degrade"
+      target_model: "gpt-3.5-turbo"
+  
+  # 2. Require Approval for Expensive Requests (> 5 EUR)
+  - id: "approve_expensive"
+    condition:
+      trigger: "high_cost"
+      threshold: 5.00
+    action:
+      type: "require_approval"
+
+  # 3. Degrade Anthropic Opus to Sonnet on Soft Limit
+  - id: "downgrade_opus_soft"
+    condition:
+      trigger: "soft_limit"
+      provider: "anthropic"
+      model: "claude-3-opus"
+    action:
+      type: "degrade"
+      target_model: "claude-3-sonnet"

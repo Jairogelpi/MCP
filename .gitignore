@@ -1,0 +1,30 @@
+# Node
+node_modules/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Databases
+*.sqlite
+*.sqlite-journal
+
+# Logs
+*.log
+gateway.log
+upstream_a.log
+upstream_b.log
+*.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/

@@ -1,0 +1,36 @@
+{
+    "version": "1.0.0",
+    "currency": "EUR",
+    "rates": [
+        {
+            "provider": "openai",
+            "model": "gpt-4",
+            "cost_per_1k_tokens_in": 0.03,
+            "cost_per_1k_tokens_out": 0.06
+        },
+        {
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "cost_per_1k_tokens_in": 0.001,
+            "cost_per_1k_tokens_out": 0.002
+        },
+        {
+            "provider": "anthropic",
+            "model": "claude-3-opus",
+            "cost_per_1k_tokens_in": 0.015,
+            "cost_per_1k_tokens_out": 0.075
+        },
+        {
+            "provider": "anthropic",
+            "model": "claude-3-sonnet",
+            "cost_per_1k_tokens_in": 0.003,
+            "cost_per_1k_tokens_out": 0.015
+        },
+        {
+            "provider": "internal",
+            "tier": "standard",
+            "cost_per_1k_tokens_in": 0.0001,
+            "cost_per_1k_tokens_out": 0.0001
+        }
+    ]
+}

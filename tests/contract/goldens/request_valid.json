@@ -1,8 +1,16 @@
 {
+    "id": "123456789",
+    "version": "1.0",
     "type": "command",
-    "action": "valid_command",
+    "action": "valid_tool",
     "parameters": {
-        "foo": "bar",
+        "query": "test query",
         "amount": 100
+    },
+    "meta": {
+        "tenant": "acme",
+        "targetServer": "finance-core",
+        "timestamp": 1678886400000,
+        "source": "test-runner"
     }
 }

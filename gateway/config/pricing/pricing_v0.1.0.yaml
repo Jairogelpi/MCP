@@ -1,0 +1,75 @@
+version: "0.1.0"
+rates:
+  # OPENAI
+  - provider: "openai"
+    model: "gpt-4"
+    endpoint: "*"
+    region: "global"
+    tier: "standard"
+    input_price: 0.03   # €/1k
+    output_price: 0.06  # €/1k
+    flat_fee: 0.0
+    effective_from: 1704067200000 # 2024-01-01
+
+  - provider: "openai"
+    model: "gpt-3.5-turbo"
+    endpoint: "*"
+    region: "global"
+    tier: "standard"
+    input_price: 0.001
+    output_price: 0.002
+    flat_fee: 0.0
+    effective_from: 1704067200000
+
+  # ANTHROPIC
+  - provider: "anthropic"
+    model: "claude-3-opus"
+    endpoint: "*"
+    region: "global"
+    tier: "standard"
+    input_price: 0.015
+    output_price: 0.075
+    flat_fee: 0.0
+    effective_from: 1704067200000
+
+  # INTERNAL - Standard Tools
+  - provider: "internal"
+    model: "*"
+    endpoint: "*"
+    region: "global"
+    tier: "standard"
+    input_price: 0.0
+    output_price: 0.0
+    flat_fee: 0.0001 # Minimal fee for tracking
+    effective_from: 1704067200000
+
+  # INTERNAL - Expensive Operations
+  - provider: "internal"
+    model: "*"
+    endpoint: "dangerous_op"
+    region: "global"
+    tier: "standard"
+    input_price: 0.0
+    output_price: 0.0
+    flat_fee: 0.05 # Higher fee
+    effective_from: 1704067200000
+
+  - provider: "internal"
+    model: "*"
+    endpoint: "search_op"
+    region: "global"
+    tier: "standard"
+    input_price: 0.0
+    output_price: 0.0
+    flat_fee: 0.01 # Moderate fee
+    effective_from: 1704067200000
+
+  - provider: "internal"
+    model: "*"
+    endpoint: "expensive_op"
+    region: "global"
+    tier: "standard"
+    input_price: 0.0
+    output_price: 0.0
+    flat_fee: 10.0 # Triggers High Cost (~5 EUR)
+    effective_from: 1704067200000
