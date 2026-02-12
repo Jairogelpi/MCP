@@ -1,5 +1,5 @@
 import { Interceptor } from '../core/pipeline';
-import { PolicyDecision } from '../core/contract';
+import { PolicyDecision, PolicyInput } from '../core/contract';
 import { PolicyEngine } from '../core/policy_engine';
 
 const engine = new PolicyEngine([
@@ -20,7 +20,7 @@ const engine = new PolicyEngine([
     },
     {
         id: 'egress-control',
-        target: { action: 'curl_op' }, // Applies to network actions
+        target: { action: 'curl_op' },
         effect: 'transform',
         transform: {
             checkEgress: {
@@ -42,28 +42,53 @@ const engine = new PolicyEngine([
 ]);
 
 export const policy: Interceptor = async (ctx) => {
-    console.log('[3] Policy Decision (Engine-Based)');
+    console.log('[3] Policy Decision (PEP)');
 
     const envelope = ctx.stepResults.normalized;
     if (!envelope) {
         throw new Error('Policy Step: Missing Normalized Envelope');
     }
 
-    const decision = engine.evaluate(envelope);
+    // Build Policy Input from Envelope and Context
+    // Spec: tenant_id, upstream_server_id from meta (mapped from raw URL)
+    // agent_id? We assume it's in meta.authContext or headers.
+    // For MVP, default to 'anonymous' if missing, but strictly should come from Auth.
 
-    if (!decision.allow) {
-        console.warn(`[POLICY] Request Denied: ${decision.reason}`);
+    const input: PolicyInput = {
+        tenant_id: envelope.meta.tenant,
+        upstream_server_id: envelope.meta.targetServer,
+        agent_id: (envelope.meta.authContext?.userId) || 'anonymous-agent',
+        tool_name: envelope.action,
+        args: envelope.parameters,
+        timestamp: Date.now(),
+        request_id: envelope.id
+    };
+
+    const decision = engine.evaluate(input);
+
+    if (decision.decision === 'deny') {
+        const reason = decision.reason_codes.join(', ');
+        console.warn(`[POLICY] Deny: ${reason}`);
+
         ctx.stepResults.error = {
-            code: 'POLICY_VIOLATION',
-            message: decision.reason || 'Request denied by policy',
+            code: decision.reason_codes[0], // Primary reason code
+            message: reason,
             status: 403
         };
-        throw new Error('POLICY_VIOLATION');
+        throw new Error(decision.reason_codes[0]);
     }
 
-    if (decision.transform) {
-        console.log(`[POLICY] Request Transformed: ${decision.reason}`);
-        ctx.stepResults.normalized = decision.transform;
+    if (decision.decision === 'transform' && decision.transform_patch) {
+        console.log(`[POLICY] Transform: ${decision.reason_codes.join(', ')}`);
+
+        // Patch args
+        if (decision.transform_patch.parameters) {
+            envelope.parameters = decision.transform_patch.parameters;
+        }
+
+        // Update normalized result
+        decision.transform = envelope; // For legacy/logging
+        ctx.stepResults.normalized = envelope;
     }
 
     ctx.stepResults.policy = decision;

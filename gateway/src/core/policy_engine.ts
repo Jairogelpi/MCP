@@ -1,4 +1,11 @@
-import { ActionEnvelope, PolicyDecision, PolicyRule } from './contract';
+import {
+    ActionEnvelope,
+    PolicyDecision,
+    PolicyRule,
+    PolicyInput,
+    PolicyReasonCodes,
+    RuleEffect
+} from './contract';
 
 export class PolicyEngine {
     private rules: PolicyRule[] = [];
@@ -12,83 +19,100 @@ export class PolicyEngine {
         this.rules.sort((a, b) => (b.priority || 0) - (a.priority || 0));
     }
 
-    public evaluate(envelope: ActionEnvelope): PolicyDecision {
-        const { tenant, targetServer } = envelope.meta;
-        const { action } = envelope;
-
+    public evaluate(input: PolicyInput): PolicyDecision {
+        // Find matching rules
         const matched = this.rules.filter(rule => {
-            const matchTenant = !rule.target.tenant || rule.target.tenant === '*' || rule.target.tenant === tenant;
-            const matchServer = !rule.target.server || rule.target.server === '*' || rule.target.server === targetServer;
-            const matchAction = !rule.target.action || rule.target.action === '*' || rule.target.action === action;
+            const matchTenant = !rule.target.tenant || rule.target.tenant === '*' || rule.target.tenant === input.tenant_id;
+            const matchServer = !rule.target.server || rule.target.server === '*' || rule.target.server === input.upstream_server_id;
+            const matchAction = !rule.target.action || rule.target.action === '*' || rule.target.action === input.tool_name;
             return matchTenant && matchServer && matchAction;
         });
 
         if (matched.length === 0) {
-            return { allow: true, reason: 'DEFAULT_ALLOW' };
+            return {
+                decision: 'allow',
+                reason_codes: [PolicyReasonCodes.DEFAULT_ALLOW],
+                allow: true, // compat
+                matchedRuleId: 'default'
+            };
         }
 
         const rule = matched[0];
 
         if (rule.effect === 'deny') {
             return {
-                allow: false,
-                reason: `DENIED_BY_RULE: ${rule.id}`,
+                decision: 'deny',
+                reason_codes: [PolicyReasonCodes.DENIED_BY_RULE, rule.id], // Could map specific code from rule
+                allow: false, // compat
                 matchedRuleId: rule.id
             };
         }
 
         if (rule.effect === 'transform' && rule.transform) {
             try {
-                const transformedEnvelope = this.applyTransformations(envelope, rule.transform);
+                // We need the envelope to transform. 
+                // BUT evaluate takes PolicyInput. 
+                // The engine should be able to transform the ARGS inside PolicyInput and return them.
+
+                // Let's reconstruct a partial envelope or just transform args
+                const transformedArgs = this.applyTransformations(input.args, rule.transform);
+
                 return {
+                    decision: 'transform',
+                    reason_codes: [PolicyReasonCodes.TRANSFORMED_BY_RULE, rule.id],
                     allow: true,
-                    reason: `TRANSFORMED_BY_RULE: ${rule.id}`,
-                    transform: transformedEnvelope,
-                    matchedRuleId: rule.id
+                    transform_patch: { parameters: transformedArgs }, // Patch style
+                    matchedRuleId: rule.id,
+
+                    // Legacy helper: we return a "full envelope" style object here?
+                    // The caller handles patching the real envelope.
                 };
             } catch (err) {
-                // Transformation failed (e.g. Egress Check)
+                // Map error to Reason Code
+                let code = PolicyReasonCodes.POLICY_VIOLATION;
+                if ((err as Error).message.includes('SSRF')) code = PolicyReasonCodes.SSRF_BLOCKED;
+
                 return {
+                    decision: 'deny',
+                    reason_codes: [code, (err as Error).message],
                     allow: false,
-                    reason: `POLICY_VIOLATION: ${(err as Error).message}`,
                     matchedRuleId: rule.id
                 };
             }
         }
 
         return {
+            decision: 'allow',
+            reason_codes: [PolicyReasonCodes.ALLOWED_BY_RULE, rule.id],
             allow: true,
-            reason: `ALLOWED_BY_RULE: ${rule.id}`,
             matchedRuleId: rule.id
         };
     }
 
-    private applyTransformations(envelope: ActionEnvelope, transform: NonNullable<PolicyRule['transform']>): ActionEnvelope {
-        const clone = JSON.parse(JSON.stringify(envelope));
+    private applyTransformations(args: any, transform: NonNullable<PolicyRule['transform']>): any {
+        const clone = JSON.parse(JSON.stringify(args || {}));
 
         if (transform.forceArgs) {
-            clone.parameters = { ...clone.parameters, ...transform.forceArgs };
+            Object.assign(clone, transform.forceArgs);
         }
 
         if (transform.redactPII) {
             for (const field of transform.redactPII) {
-                if (clone.parameters[field] && typeof clone.parameters[field] === 'string') {
-                    clone.parameters[field] = '***REDACTED***';
+                if (clone[field] && typeof clone[field] === 'string') {
+                    clone[field] = '***REDACTED***';
                 }
             }
         }
 
         if (transform.checkEgress) {
-            this.validateEgress(clone.parameters, transform.checkEgress);
+            this.validateEgress(clone, transform.checkEgress);
         }
 
         return clone;
     }
 
-    // Recursive validation
     private validateEgress(obj: any, options: { allowList?: string[], blockPrivate?: boolean }) {
         if (typeof obj === 'string') {
-            // Basic URL detection
             if (obj.startsWith('http://') || obj.startsWith('https://')) {
                 this.checkUrl(obj, options);
             }
@@ -105,20 +129,20 @@ export class PolicyEngine {
             const u = new URL(urlString);
             hostname = u.hostname;
         } catch {
-            return; // Not a valid URL, ignore
+            return;
         }
 
         if (options.blockPrivate) {
             if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' ||
                 hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.endsWith('.local')) {
-                throw new Error(`SSRF Block: Private access to ${hostname} is denied`);
+                throw new Error('SSRF Block');
             }
         }
 
         if (options.allowList && options.allowList.length > 0) {
             const allowed = options.allowList.some(domain => hostname === domain || hostname.endsWith('.' + domain));
             if (!allowed) {
-                throw new Error(`Egress Block: Domain ${hostname} is not allowed`);
+                throw new Error(`Egress Block: Domain ${hostname} not allowed`);
             }
         }
     }

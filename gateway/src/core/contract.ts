@@ -2,6 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { Readable } from 'stream';
 
 // Spec: spec/action_envelope.schema.json
+// Spec: spec/policy_contract.md
 
 export interface UnifiedRequest {
     id: string;
@@ -31,6 +32,37 @@ export interface ActionEnvelope {
 }
 
 // --- POLICY ENGINE TYPES ---
+
+export enum PolicyReasonCodes {
+    FORBIDDEN_TOOL = 'FORBIDDEN_TOOL',
+    BUDGET_HARD_LIMIT = 'BUDGET_HARD_LIMIT',
+    PII_DETECTED = 'PII_DETECTED',
+    SSRF_BLOCKED = 'SSRF_BLOCKED',
+    ARGS_LIMIT_ENFORCED = 'ARGS_LIMIT_ENFORCED',
+    TENANT_SCOPE_VIOLATION = 'TENANT_SCOPE_VIOLATION',
+    SCHEMA_MISMATCH = 'SCHEMA_MISMATCH',
+    DEFAULT_ALLOW = 'DEFAULT_ALLOW',
+    DEFAULT_DENY = 'DEFAULT_DENY',
+    POLICY_VIOLATION = 'POLICY_VIOLATION',
+    TRANSFORMED_BY_RULE = 'TRANSFORMED_BY_RULE',
+    DENIED_BY_RULE = 'DENIED_BY_RULE',
+    ALLOWED_BY_RULE = 'ALLOWED_BY_RULE'
+}
+
+export interface PolicyInput {
+    tenant_id: string;
+    project_id?: string;
+    agent_id: string;
+    session_id?: string;
+    upstream_server_id: string;
+    mcp_method?: string;
+    tool_name: string;
+    args: any;
+    input_schema_hash?: string;
+    risk_class?: string;
+    timestamp: number;
+    request_id: string;
+}
 
 export type RuleEffect = 'allow' | 'deny' | 'transform';
 
@@ -65,8 +97,12 @@ export interface PolicyRule {
 }
 
 export interface PolicyDecision {
-    allow: boolean;
-    reason?: string;
+    decision: RuleEffect;
+    reason_codes: string[]; // Minimum 1
+    transform_patch?: any;
+    obligations?: string[];
+
+    allow?: boolean;
     transform?: ActionEnvelope;
     matchedRuleId?: string;
 }
