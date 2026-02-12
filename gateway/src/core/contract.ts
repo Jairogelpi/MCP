@@ -1,4 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { Readable } from 'stream';
 
 // Spec: spec/action_envelope.schema.json
 
@@ -7,7 +8,6 @@ export interface UnifiedRequest {
     source: 'http' | 'sse';
     payload: any;
     headers: any;
-    // Context info derived from route/headers early on
     routeParams: {
         tenant: string;
         server: string;
@@ -15,26 +15,63 @@ export interface UnifiedRequest {
 }
 
 export interface ActionEnvelope {
-    id: string; // UUID trace id
-    version: string; // "0.1.0"
+    id: string;
+    version: string;
     type: 'command' | 'query';
-    action: string; // Tool name
+    action: string;
     parameters: any;
     meta: {
         timestamp: number;
-        source: string; // IP or Client ID
+        source: string;
         tenant: string;
         targetServer: string;
-        authContext?: any; // Populated by Auth Step
-        [key: string]: any; // Extensible for other interceptors
+        authContext?: any;
+        [key: string]: any;
     };
+}
+
+// --- POLICY ENGINE TYPES ---
+
+export type RuleEffect = 'allow' | 'deny' | 'transform';
+
+export interface PolicyConditions {
+    maxBudget?: number;
+    allowedDomains?: string[];
+    requiredScopes?: string[];
+    [key: string]: any;
+}
+
+export interface PolicyTransform {
+    redactPII?: string[];
+    forceArgs?: Record<string, any>;
+    checkEgress?: {
+        allowList?: string[];
+        blockPrivate?: boolean;
+    };
+}
+
+export interface PolicyRule {
+    id: string;
+    description?: string;
+    target: {
+        tenant?: string;
+        server?: string;
+        action?: string;
+    };
+    conditions?: PolicyConditions;
+    effect: RuleEffect;
+    transform?: PolicyTransform;
+    priority?: number;
 }
 
 export interface PolicyDecision {
     allow: boolean;
-    reason?: string; // Should map to Error Codes like POLICY_DENY
+    reason?: string;
     transform?: ActionEnvelope;
+    matchedRuleId?: string;
 }
+
+// ---------------------------
 
 export interface EconomicReservation {
     reservationId: string;
@@ -46,6 +83,8 @@ export interface EconomicReservation {
 export interface UpstreamResponse {
     result: any;
     upstreamLatency: number;
+    isStream?: boolean;
+    stream?: Readable;
 }
 
 export interface Receipt {
@@ -64,13 +103,13 @@ export interface PipelineContext {
     request: FastifyRequest;
     reply: FastifyReply;
     stepResults: {
-        raw?: any; // Payload received
+        raw?: any;
         normalized?: ActionEnvelope;
         policy?: PolicyDecision;
         reservation?: EconomicReservation;
         upstream?: UpstreamResponse;
         receipt?: Receipt;
-        error?: { // Captured error for standardized response
+        error?: {
             code: string;
             message: string;
             status: number;

@@ -1,0 +1,7 @@
+{
+    "name": "mcp-contract-tests",
+    "version": "1.0.0",
+    "scripts": {
+        "test": "node run_contract_tests.js"
+    }
+}

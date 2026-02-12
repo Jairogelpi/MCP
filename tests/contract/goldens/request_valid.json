@@ -1,0 +1,8 @@
+{
+    "type": "command",
+    "action": "valid_command",
+    "parameters": {
+        "foo": "bar",
+        "amount": 100
+    }
+}

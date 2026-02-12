@@ -1,0 +1,12 @@
+{
+    "status": "success",
+    "cost": 10,
+    "details": {
+        "isStream": false,
+        "result": {
+            "status": "executed",
+            "data": "Result for valid_command"
+        },
+        "upstreamLatency": 50
+    }
+}
