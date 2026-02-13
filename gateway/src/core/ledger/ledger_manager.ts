@@ -7,6 +7,7 @@ export interface LedgerReservation {
     state: 'RESERVED' | 'SETTLED' | 'VOIDED';
     amount_reserved: number;
     amount_settled: number;
+    budget_scopes: string; // JSON string
     expires_at?: number;
 }
 
@@ -114,7 +115,8 @@ export class LedgerManager {
                 request_id: context.requestId,
                 reserve_entry_id: entryId,
                 amount: context.amount,
-                expires_at: Date.now() + 60000
+                budget_scopes: JSON.stringify(context.budgetScopes),
+                expires_at: Date.now() + 60000 // 1 minute TTL
             });
 
             return { success: true, reserveId: context.requestId };
@@ -235,6 +237,22 @@ export class LedgerManager {
             transaction();
         } catch (e) {
             console.error('[LEDGER] Void Transaction Failed:', e);
+        }
+    }
+
+    public reaper() {
+        // console.log('[LEDGER] Running reaper...');
+        const expired = db.ledger.getExpiredReservations(Date.now()) as LedgerReservation[];
+        if (expired.length > 0) {
+            console.log(`[LEDGER] Reaper: Cleaning up ${expired.length} expired reservations.`);
+            for (const res of expired) {
+                try {
+                    const scopes = JSON.parse(res.budget_scopes);
+                    this.void(res.request_id, scopes);
+                } catch (e) {
+                    console.error(`[LEDGER] Reaper failed for ${res.request_id}:`, e);
+                }
+            }
         }
     }
 }

@@ -144,6 +144,8 @@ export interface EconomicReservation {
 
 export interface UpstreamResponse {
     result: any;
+    body?: any; // Full Raw Body
+    headers?: any;
     upstreamLatency: number;
     isStream?: boolean;
     stream?: Readable;
@@ -171,9 +173,12 @@ export interface PipelineContext {
         reservation?: EconomicReservation; // Deprecated but kept for compatibility if needed
         economic?: {
             cost: number;
+            real_cost?: number;
             currency: string;
             reserve_id?: string;
             budget_scopes?: string[];
+            model?: string;
+            endpoint?: string;
         }; // New field
         upstream?: UpstreamResponse;
         receipt?: Receipt;

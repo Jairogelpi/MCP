@@ -97,7 +97,7 @@ export function seedData() {
     console.log('[SEED] Seeding Pricing...');
     db.raw.run(`
         INSERT INTO pricing_tiers (provider, model, endpoint, region, tier, input_price, output_price, flat_fee, effective_from, created_at)
-        VALUES ('internal', '*', 'search_op', 'global', 'standard', 0.0, 0.0, 0.01, 0, ?)
+        VALUES ('internal', '*', '*', 'global', 'standard', 0.001, 0.001, 0.01, 0, ?)
     `, [Date.now()]);
 
     db.raw.run(`

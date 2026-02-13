@@ -62,4 +62,16 @@ export class CostEstimator {
             currency
         };
     }
+
+    public calculateRealCost(
+        context: { provider: string; model?: string; endpoint?: string; tier?: string },
+        usage: { input_tokens: number; output_tokens: number }
+    ): number {
+        const rate = this.pricing.getPrice(context);
+        if (!rate) return -1;
+
+        const costIn = (usage.input_tokens / 1000) * rate.input_price;
+        const costOut = (usage.output_tokens / 1000) * rate.output_price;
+        return costIn + costOut + rate.flat_fee;
+    }
 }

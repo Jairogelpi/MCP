@@ -22,18 +22,9 @@ export const settlement: Interceptor = async (ctx) => {
     // Usually AI API charges on usage (tokens generated).
     // If upstream error, usually 0 cost.
 
-    let realCost = econ.cost; // Default to estimated
-
-    // If we have actual usage from 05_forward or 07_receipt (e.g. usage field), use it.
-    // Assuming for now verification tests settle estimated amount.
-
-    // Status Check
-    // If pipeline has error, we might be here if we use `finally` block?
-    // But interceptors run sequentially.
-    // If Error thrown in Pipeline, this step is SKIPPED by PipelineRunner.
-    // So `settle()` must be called explicitly in error handler (VOID) or success (SETTLE).
+    let realCost = econ.real_cost ?? econ.cost; // Use real if captured, else estimated
 
     // IF this runs, it means Success (mostly).
     ledger.settle(envelope.id, realCost, econ.budget_scopes || []);
-    console.log(`[LEDGER] Settled ${realCost} EUR for ${envelope.id}`);
+    console.log(`[LEDGER] Settled ${realCost} EUR for ${envelope.id} (Reserved: ${econ.cost})`);
 };

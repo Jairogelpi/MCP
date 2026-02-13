@@ -83,6 +83,10 @@ const server = http.createServer((req, res) => {
                 const request = JSON.parse(body);
                 console.log(`[UPSTREAM] Received: ${request.method}`);
 
+                const delay = parseInt(req.headers['x-test-delay-ms'] || '0');
+                const tokensIn = parseInt(req.headers['x-test-tokens-in'] || '100');
+                const tokensOut = parseInt(req.headers['x-test-tokens-out'] || '100');
+
                 if (request.method === 'tools/list') {
                     const response = {
                         jsonrpc: '2.0',
@@ -101,11 +105,18 @@ const server = http.createServer((req, res) => {
                     jsonrpc: '2.0',
                     id: request.id,
                     result: {
-                        content: [{ type: 'text', text: `Result for ${request.params?.name || 'unknown'}` }]
+                        content: [{ type: 'text', text: `Result for ${request.params?.name || 'unknown'}` }],
+                        usage: {
+                            input_tokens: tokensIn,
+                            output_tokens: tokensOut
+                        }
                     }
                 };
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify(response));
+
+                setTimeout(() => {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify(response));
+                }, delay);
 
             } catch (err) {
                 console.error('[UPSTREAM] Error:', err);

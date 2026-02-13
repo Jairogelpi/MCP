@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS ledger_reservations (
     amount_reserved REAL NOT NULL,
     amount_settled REAL DEFAULT 0,
     amount_refunded REAL DEFAULT 0,
+    budget_scopes TEXT NOT NULL, -- JSON array of scopes to release on VOID
     expires_at INTEGER,
     updated_at INTEGER NOT NULL
 );

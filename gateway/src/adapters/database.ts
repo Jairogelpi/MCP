@@ -211,8 +211,8 @@ export const db = {
         createReservation: (res: any) => {
             const now = Date.now();
             sqlite.prepare(`
-                INSERT INTO ledger_reservations (request_id, reserve_entry_id, state, amount_reserved, expires_at, updated_at)
-                VALUES (@request_id, @reserve_entry_id, 'RESERVED', @amount, @expires_at, @now)
+                INSERT INTO ledger_reservations (request_id, reserve_entry_id, state, amount_reserved, budget_scopes, expires_at, updated_at)
+                VALUES (@request_id, @reserve_entry_id, 'RESERVED', @amount, @budget_scopes, @expires_at, @now)
             `).run({ ...res, now });
         },
         updateReservationState: (requestId: string, state: string, settledAmount: number) => {
@@ -225,6 +225,9 @@ export const db = {
         },
         getReservation: (requestId: string) => {
             return sqlite.prepare('SELECT * FROM ledger_reservations WHERE request_id = @requestId').get({ requestId });
+        },
+        getExpiredReservations: (now: number) => {
+            return sqlite.prepare('SELECT * FROM ledger_reservations WHERE state = \'RESERVED\' AND expires_at < @now').all({ now });
         }
     },
 

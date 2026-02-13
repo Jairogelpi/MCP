@@ -10,6 +10,9 @@ import { capture } from './interceptors/06_capture';
 import { receiptInteractor } from './interceptors/07_receipt';
 import { telemetry } from './interceptors/08_telemetry';
 import { CatalogManager } from './core/catalog_manager';
+import { LedgerManager } from './core/ledger/ledger_manager';
+import { settlement } from './interceptors/09_settlement';
+import { PipelineRunner } from './core/pipeline';
 
 const server: FastifyInstance = Fastify({ logger: true });
 
@@ -100,9 +103,6 @@ server.post('/mcp/:tenant/:server', async (request, reply) => {
     // "const context: PipelineContext = { ... }" in pipeline.ts
 
     // REVERT helper usage. Use class directly.
-    const { PipelineRunner } = require('./core/pipeline'); // Import class
-    const { settlement } = require('./interceptors/09_settlement'); // Import settlement
-    const { LedgerManager } = require('./core/ledger/ledger_manager'); // Import ledger
     const runner = new PipelineRunner();
 
     [parseValidate, normalize, policy, economic, forward, capture, receiptInteractor, telemetry, settlement].forEach(i => runner.use(i));
@@ -159,6 +159,12 @@ const start = async () => {
         await initializeCatalog();
         const { seedData } = require('./seed_data');
         seedData();
+
+        // Start Ledger Reaper (Phase 4.5)
+        setInterval(() => {
+            LedgerManager.getInstance().reaper();
+        }, 30000); // Every 30s
+
         await server.listen({ port: 3000, host: '0.0.0.0' });
         console.log('Gateway listening on 0.0.0.0:3000');
     } catch (err) {
