@@ -94,7 +94,6 @@ export function seedData() {
     }
 
     // Pricing
-    console.log('[SEED] Seeding Pricing...');
     db.raw.run(`
         INSERT INTO pricing_tiers (provider, model, endpoint, region, tier, input_price, output_price, flat_fee, effective_from, created_at)
         VALUES ('internal', '*', '*', 'global', 'standard', 0.001, 0.001, 0.01, 0, ?)
@@ -105,5 +104,12 @@ export function seedData() {
         VALUES ('internal', '*', 'expensive_op', 'global', 'standard', 0.0, 0.0, 1.0, 0, ?)
     `, [Date.now()]);
 
-    console.log(`[SEED] Seeded ${budgets.length} budgets and pricing.`);
+    // ENSURE key_registry (Safe for all environments)
+    db.raw.run(`
+        INSERT INTO key_registry (key_id, public_key, status, created_at)
+        VALUES ('gateway-key-v1', 'MCowBQYDK2VwAyEAixt6mRBe1N4vNIn6e9sR5f2D6Z0pExE2oF3U/9p79Xo=', 'active', ?)
+        ON CONFLICT(key_id) DO NOTHING
+    `, [Date.now()]);
+
+    console.log(`[SEED] Seeded key_registry, pricing and ${budgets.length} budgets.`);
 }
