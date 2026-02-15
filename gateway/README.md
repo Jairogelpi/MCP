@@ -1,48 +1,37 @@
-# MCP Enterprise Gateway (v1.0.0)
+# Gateway MCP Enterprise (v1.0.0)
 
-> **"The Bank-Grade Gateway for the Model Context Protocol"**
+> **"El Gateway de Grado Bancario para el Model Context Protocol"**
 
-This is not a toy. This is a production-hardened, formally verified, and audit-ready gateway designed for financial institutions and enterprises deploying MCP Agents in the real world.
+Este gateway está diseñado para entornos de alta seguridad donde los agentes de IA necesitan interactuar con sistemas financieros reales de forma auditable e inmutable.
 
-## 🚀 Ready for Real Life? **YES.**
+## 🚀 Características Principales
 
-Unlike standard MCP SDKs, this Gateway provides the "Missing Layer" required for production:
+### 1. 🛡️ Seguridad y Gobernanza
+- **RBAC e IAM**: Gestión de identidades para diferenciar entre administradores y visores.
+- **Detección de Fraude**: Filtros para peticiones maliciosas.
 
-### 1. 🛡️ Security & Governance
-- **RBAC & IAM**: Granular API Keys with scoped permissions (Admin vs Viewer).
-- **Anti-Fraud**: Heuristic detection engine to block malicious prompts/tools.
-- **Verification**: `RevocationManager` enforces publisher policies and blocks banned packages.
+### 2. 💰 Rieles Financieros
+- **Libro Mayor (Ledger)**: Contabilidad de doble entrada con cumplimiento ACID.
+- **Cadena de Recibos**: Cada ejecución genera un recibo firmado y encadenado criptográficamente.
 
-### 2. 💰 Financial Rails (Real Money)
-- **Settlement Engine**: Aggregates usage and calculates payouts for Agent developers.
-- **Double-Entry Ledger**: ACID-compliant accounting with `reserve()` operations.
-- **Banking Adapters**: Pluggable architecture (currently Mock, ready for Stripe/Adyen).
+### 3. 👁️ Observabilidad
+- **Trazabilidad Abierta**: Integración nativa con OpenTelemetry.
+- **Auditoría**: Logs inmutables de cumplimiento.
 
-### 3. 👁️ Observability & Compliance
-- **Audit Logs**: Immutable record of every tool call and data access.
-- **OpenTelemetry**: Full tracing from the Edge to the Database.
-- **KYC Integration**: Identity verification hooks before payouts are released.
+## 📦 Arquitectura basada en Adaptadores
 
-### 4. 🧱 Infrastructure
-- **Active-Active**: Designed for multi-region failover.
-- **Database Agnostic**: Runs on **Postgres** (Production) or **SQLite** (Dev).
-- **Dockerized**: One-command deployment via `docker-compose.prod.yaml`.
-
-## 📦 Architecture via Adapters
-
-We use a strict **Hexagonal Architecture (Ports & Adapters)** to isolate the core logic from external dependencies:
+Utilizamos una **Arquitectura Hexagonal** para aislar la lógica de negocio de las bases de datos y APIs externas:
 
 ```typescript
-// It doesn't matter if it's Stripe, PayPal, or a Mock.
-// The Core Logic stays the same.
+// No importa si es Stripe, PayPal o un Mock.
+// La lógica central permanece inmutable.
 const banking = new BankingAdapter(); 
 await banking.payout(payeeId, amount);
 ```
 
-## 👩‍💻 Developers & Integration
+## 👩‍💻 Integración para Desarrolladores
 
-### 1. Enterprise SDKs
-We provide typed SDKs for seamless integration.
+### 1. SDKs Empresariales
 
 #### Node.js
 ```javascript
@@ -55,25 +44,10 @@ const client = new MCPGatewayClient({
 });
 
 const result = await client.callTool('finance-core', 'get_balance', { account: 'A1' });
-console.log(`Receipt: ${result.receiptId}`);
+console.log(`Recibo: ${result.receiptId}`);
 ```
 
-#### Python
-```python
-from mcp_gateway import MCPGatewayClient
-
-client = MCPGatewayClient(
-    base_url="https://gateway.acme.com", 
-    tenant_id="my-app",
-    api_key="mcp_sk_..."
-)
-
-result = await client.call_tool("finance-core", "get_balance", {"account": "A1"})
-print(f"Receipt: {result['receipt_id']}")
-```
-
-### 2. Raw API (HTTP/Remote)
-For those who prefer raw HTTP or `curl`:
+### 2. API Raw (HTTP)
 
 ```bash
 POST /mcp/tools/call HTTP/1.1
@@ -88,28 +62,23 @@ Authorization: Bearer mcp_sk_...
 }
 ```
 
-**Response Headers**:
-- `x-mcp-receipt-id`: `r_12345...` (The proof of execution)
-- `x-mcp-signature`: `sig_abc...` (Digital signature)
+## 🏁 Inicio Rápido (Producción)
 
-
-## 🏁 Quick Start (Production)
-
-1. **Configure Environment**:
+1. **Configurar Entorno**:
    ```bash
    cp deploy/env.example .env
-   # Set DATABASE_URL=postgres://user:pass@localhost:5432/mcp
+   # Configurar DATABASE_URL
    ```
 
-2. **Run with Docker**:
+2. **Ejecutar con Docker**:
    ```bash
    docker-compose -f deploy/docker-compose.prod.yaml up -d
    ```
 
-3. **Provision Tenant**:
+3. **Provisionar Tenant**:
    ```bash
-   npx tsx src/admin/provision_tenant.ts --name "My Bank"
+   npx tsx src/admin/provision_tenant.ts --name "Banco Demo"
    ```
 
 ---
-*Built with ❤️ for the MCP Ecosystem.*
+*Construido con ❤️ para el ecosistema MCP.*
