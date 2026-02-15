@@ -1,0 +1,7 @@
+# Default Budget Templates
+scopes:
+  - scope_id: "tenant:{{tenant_id}}"
+    hard_limit: 50.0
+    soft_limit: 10.0
+    currency: "EUR"
+    alert_threshold: 0.8 # 80%

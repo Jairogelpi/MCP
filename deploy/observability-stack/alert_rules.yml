@@ -1,0 +1,47 @@
+groups:
+  - name: mcp_gateway_alerts
+    rules:
+      - alert: ledger_unavailable
+        expr: delta(ledger_reserve_failed[1m]) > 0 or delta(ledger_settle_failed[1m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Ledger Service Unavailable"
+          description: "Reserve or Settle operations are failing. Check runbooks/ledger_down.md"
+
+      - alert: overrun_total_spike
+        expr: delta(ledger_settle_overrun_exceeded[5m]) > 10
+        for: 2m
+        labels:
+          severity: high
+        annotations:
+          summary: "Budget Overrun Spike"
+          description: "Significant increase in budget overruns detected. Check runbooks/overrun_spike.md"
+
+      - alert: high_burn_rate
+        expr: sum by (tenant_id) (rate(ledger_settled_total[1h])) > 100
+        for: 10m
+        labels:
+          severity: high
+        annotations:
+          summary: "High Burn Rate for Tenant {{ $labels.tenant_id }}"
+          description: "Cost per hour exceeded safe threshold."
+
+      - alert: policy_denies_spike
+        expr: rate(policy_denies_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: medium
+        annotations:
+          summary: "Policy Denies Spike"
+          description: "Large number of requests denied by policy/PII/SSRF logic. Check runbooks/deny_spike_pii_ssrf.md"
+
+      - alert: high_upstream_latency
+        expr: histogram_quantile(0.99, rate(mcp_request_latency_ms_hist_bucket[5m])) > 5000
+        for: 5m
+        labels:
+          severity: medium
+        annotations:
+          summary: "High Upstream Latency (p99)"
+          description: "End-to-end request latency exceeding 5s. Check runbooks/upstream_degraded.md"

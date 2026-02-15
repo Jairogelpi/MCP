@@ -1,18 +1,33 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import { pipelineRunner } from './core/pipeline';
 import { PipelineContext } from './core/contract';
+import { auth } from './interceptors/00_auth';
 import { parseValidate } from './interceptors/01_parse_validate';
 import { normalize } from './interceptors/02_normalize';
+import { waf } from './interceptors/02b_waf';
+import { rateLimit } from './interceptors/02c_rate_limit';
 import { policy } from './interceptors/03_policy';
 import { economic } from './interceptors/04_economic';
 import { forward } from './interceptors/05_forward';
 import { capture } from './interceptors/06_capture';
 import { receiptInteractor } from './interceptors/07_receipt';
 import { telemetry } from './interceptors/08_telemetry';
+import { audit } from './interceptors/09_audit';
 import { CatalogManager } from './core/catalog_manager';
 import { LedgerManager } from './core/ledger/ledger_manager';
 import { settlement } from './interceptors/09_settlement';
 import { PipelineRunner } from './core/pipeline';
+
+import { startTelemetry } from './telemetry';
+import { trace, metrics, SpanStatusCode } from '@opentelemetry/api';
+import { registerAdminRoutes } from './admin/api_routes';
+
+// Start Telemetry ASAP
+startTelemetry();
+
+const tracer = trace.getTracer('mcp-gateway');
+const meter = metrics.getMeter('mcp-gateway');
+const requestCounter = meter.createCounter('mcp_requests_total', { description: 'Total MCP requests' });
 
 const server: FastifyInstance = Fastify({ logger: true });
 
@@ -24,6 +39,10 @@ const UPSTREAMS = [
 
 // --- ERROR HANDLER ---
 server.setErrorHandler((error, request, reply) => {
+    // Span is likely closed in the handler wrapper, but we can capture exception if we access the active span?
+    // Hard to get active span here if scope was lost, but usually OTel handles it if using auto-instrumentation.
+    // For manual, we rely on the catch block in the route handler.
+
     server.log.error(error);
     const msg = error.message;
 
@@ -76,89 +95,148 @@ async function initializeCatalog() {
             console.error(`[INIT] Failed to fetch tools from ${upstream.id}:`, err);
         }
     }
+
+    // Virtual Tools for Testing
+    if (process.env.VIRTUAL_TOOLS) {
+        console.log('[INIT] Registering Virtual Tools for Testing...');
+        catalog.upsertTool({
+            name: 'valid_tool',
+            description: 'Mock tool for degradation testing',
+            inputSchema: { type: 'object' },
+            upstreamId: 'finance-core'
+        });
+    }
+
     catalog.exportSnapshot('./tools_snapshot.json');
 }
 
 // --- SERVER SETUP ---
 
 server.post('/mcp/:tenant/:server', async (request, reply) => {
-    const { tenant, server } = request.params as { tenant: string; server: string };
+    return tracer.startActiveSpan('edge.receive', async (span) => {
+        const { tenant, server } = request.params as { tenant: string; server: string };
+        const { logger } = require('./core/logger');
 
-    // Debug Params
-    console.log(`[SERVER] Request Params: tenant=${tenant}, server=${server}`);
+        logger.info('request_received', {
+            tenant_id: tenant,
+            upstream_server: server,
+            method: 'POST',
+            url: request.url
+        });
 
-    // Create Context manually to get ref to stepResults
-    const context: PipelineContext = {
-        request,
-        reply,
-        stepResults: {
-            // Initial Raw Body is set in parseValidate, but we need stepResults object exists
-        }
-    };
+        // Add Attributes
+        span.setAttribute('tenant_id', tenant);
+        span.setAttribute('upstream_server', server);
+        span.setAttribute('http.method', 'POST');
+        span.setAttribute('http.url', request.url);
 
-    // We can't use helper if we want to access context AFTER run.
-    // So we use PipelineRunner class directly or update helper to return context.
-    // Let's use the helper but pass "stepResults" via the request decoration or just rely on helper mutating valid object?
-    // The helper creates a NEW context. That's a problem!
-    // "const context: PipelineContext = { ... }" in pipeline.ts
+        // Create Context manually to get ref to stepResults
+        const context: PipelineContext = {
+            request,
+            reply,
+            stepResults: {}
+        };
 
-    // REVERT helper usage. Use class directly.
-    const runner = new PipelineRunner();
+        const runner = new PipelineRunner();
 
-    [parseValidate, normalize, policy, economic, forward, capture, receiptInteractor, telemetry, settlement].forEach(i => runner.use(i));
+        // Register interceptors
+        [auth, parseValidate, normalize, waf, rateLimit, policy, economic, forward, capture, receiptInteractor, telemetry, settlement, audit].forEach(i => runner.use(i));
 
-    try {
-        await runner.run(context);
-    } catch (err: any) {
-        // --- VOID RESERVATION ON ERROR ---
-        const reserveId = context.stepResults.economic?.reserve_id;
-        if (reserveId) {
-            console.warn(`[SERVER] Error during pipeline. Voiding reservation ${reserveId}...`);
-            const ledger = LedgerManager.getInstance();
-            // Need request_id. From context or reservation?
-            // LedgerManager.void takes request_id.
-            // We stored request_id in context.stepResults.normalized?.id?
-            // If normalized failed, we don't have ID.
-            // But if economic ran, normalized MUST have run.
-            // So we use context.stepResults.normalized.id
-            const reqId = context.stepResults.normalized?.id;
-            const scopes = context.stepResults.economic?.budget_scopes || [];
-            if (reqId) {
-                ledger.void(reqId, scopes);
-                console.warn(`[SERVER] Voided reservation ${reserveId} (Request: ${reqId})`);
+        try {
+            await runner.run(context);
+
+            span.setStatus({ code: SpanStatusCode.OK });
+            const toolName = context.stepResults.normalized?.action || 'unknown';
+
+            logger.info('request_processed', {
+                tenant_id: tenant,
+                upstream_server: server,
+                tool_name: toolName,
+                outcome: 'SUCCESS',
+                latency_ms: 0
+            });
+
+            requestCounter.add(1, {
+                tenant_id: tenant,
+                upstream_server: server,
+                outcome: 'SUCCESS',
+                tool_name: toolName
+            });
+
+        } catch (err: any) {
+            span.recordException(err);
+            span.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
+
+            const toolName = context.stepResults.normalized?.action || 'unknown';
+
+            logger.error('request_failed', {
+                tenant_id: tenant,
+                upstream_server: server,
+                tool_name: toolName,
+                error_code: err.message,
+                outcome: 'FAILURE'
+            });
+
+            requestCounter.add(1, {
+                tenant_id: tenant,
+                upstream_server: server,
+                outcome: 'FAILURE',
+                tool_name: toolName
+            });
+
+            // --- VOID RESERVATION ON ERROR ---
+            const reserveId = context.stepResults.economic?.reserve_id;
+            if (reserveId) {
+                console.warn(`[SERVER] Error during pipeline. Voiding reservation ${reserveId}...`);
+                const ledger = LedgerManager.getInstance();
+                const reqId = context.stepResults.normalized?.id;
+                const scopes = context.stepResults.economic?.budget_scopes || [];
+                if (reqId) {
+                    await ledger.void(reqId, scopes);
+                    console.warn(`[SERVER] Voided reservation ${reserveId} (Request: ${reqId})`);
+                }
             }
+            throw err; // Re-throw to error handler
+        } finally {
+            span.end();
         }
-        throw err; // Re-throw to error handler
-    }
 
-    // --- SEND RESPONSE ---
+        // --- SEND RESPONSE ---
 
-    if (context.stepResults.error) {
-        throw new Error(context.stepResults.error.code);
-    }
+        if (context.stepResults.error) {
+            requestCounter.add(1, {
+                tenant_id: tenant,
+                upstream_server: server,
+                outcome: context.stepResults.error.code,
+                tool_name: context.stepResults.normalized?.action || 'unknown'
+            });
+            throw new Error(context.stepResults.error.code);
+        }
 
-    const upstream = context.stepResults.upstream;
-    if (upstream?.isStream && upstream.stream) {
-        console.log('[SERVER] Sending Stream Response');
-        return reply.send(upstream.stream);
-    }
+        const upstream = context.stepResults.upstream;
+        if (upstream?.isStream && upstream.stream) {
+            console.log('[SERVER] Sending Stream Response');
+            return reply.send(upstream.stream);
+        }
 
-    const receipt = context.stepResults.receipt;
-    if (receipt) {
-        console.log('[SERVER] Sending Receipt Response');
-        return reply.send(receipt);
-    }
+        const receipt = context.stepResults.receipt;
+        if (receipt) {
+            console.log('[SERVER] Sending Receipt Response');
+            return reply.send(receipt);
+        }
 
-    // Fallback
-    console.error('[SERVER] No response generated');
-    throw new Error('NO_RESPONSE_GENERATED');
+        // Fallback
+        console.error('[SERVER] No response generated');
+        throw new Error('NO_RESPONSE_GENERATED');
+    });
 });
 
 const start = async () => {
     try {
         await initializeCatalog();
+        registerAdminRoutes(server);
         const { seedData } = require('./seed_data');
-        seedData();
+        await seedData();
 
         // Start Ledger Reaper (Phase 4.5)
         setInterval(() => {

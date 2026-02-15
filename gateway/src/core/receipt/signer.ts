@@ -12,7 +12,13 @@ export class ReceiptSigner {
         // For Phase 5.4, we will use a seed key if not provided
         const envKey = process.env.GATEWAY_PRIVATE_KEY;
         if (envKey) {
-            this.privateKey = Buffer.from(envKey, 'base64');
+            if (envKey.includes('-----BEGIN')) {
+                // Handle PEM string directly
+                this.privateKey = Buffer.from(envKey, 'utf8');
+            } else {
+                // Assume Base64 DER
+                this.privateKey = Buffer.from(envKey, 'base64');
+            }
         }
     }
 
@@ -53,11 +59,19 @@ export class ReceiptSigner {
         const canonical = this.canonicalize(payload);
 
         // Prepare Key
-        const key = crypto.createPrivateKey({
-            key: this.privateKey,
-            format: 'der',
-            type: 'pkcs8'
-        });
+        // Prepare Key
+        let key;
+        const isPem = this.privateKey.toString('utf8').includes('-----BEGIN');
+
+        if (isPem) {
+            key = crypto.createPrivateKey(this.privateKey);
+        } else {
+            key = crypto.createPrivateKey({
+                key: this.privateKey,
+                format: 'der',
+                type: 'pkcs8'
+            });
+        }
 
         // Ed25519 signing doesn't use a hash algorithm (it's built-in)
         const sig = crypto.sign(undefined, Buffer.from(canonical), key);
@@ -69,14 +83,18 @@ export class ReceiptSigner {
         const { signature, ...payload } = receipt;
         const canonical = this.canonicalize(payload);
         const sigBuffer = Buffer.from(signature.sig, 'base64');
-        const pubKeyBuffer = Buffer.from(publicKey, 'base64');
 
         try {
-            const key = crypto.createPublicKey({
-                key: pubKeyBuffer,
-                format: 'der',
-                type: 'spki'
-            });
+            let key;
+            if (publicKey.includes('-----BEGIN')) {
+                key = crypto.createPublicKey(publicKey);
+            } else {
+                key = crypto.createPublicKey({
+                    key: Buffer.from(publicKey, 'base64'),
+                    format: 'der',
+                    type: 'spki'
+                });
+            }
 
             return crypto.verify(
                 undefined,

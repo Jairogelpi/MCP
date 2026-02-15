@@ -1,0 +1,19 @@
+{
+    "name": "@mcp-gateway/sdk",
+    "version": "0.1.0",
+    "description": "Official Node.js SDK for MCP Gateway",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "test": "jest"
+    },
+    "dependencies": {
+        "@types/node": "^25.2.3",
+        "axios": "^1.13.5",
+        "crypto": "^1.0.1"
+    },
+    "devDependencies": {
+        "typescript": "^5.0.0"
+    }
+}

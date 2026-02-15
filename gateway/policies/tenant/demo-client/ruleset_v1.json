@@ -1,0 +1,35 @@
+{
+    "tenant_id": "demo-client",
+    "version": "1.0.0",
+    "created_at": 1770934000000,
+    "rules": [
+        {
+            "id": "allow-basic",
+            "name": "Allow Basic Tools",
+            "effect": "allow",
+            "priority": 10,
+            "when": {
+                "tool_name": "get_balance"
+            }
+        },
+        {
+            "id": "allow-transfer-admin",
+            "name": "Allow Transfer for Admins",
+            "effect": "allow",
+            "priority": 50,
+            "when": {
+                "tool_name": "transfer",
+                "role": [
+                    "admin"
+                ]
+            }
+        },
+        {
+            "id": "default-deny",
+            "name": "Default Deny All",
+            "effect": "deny",
+            "priority": 0,
+            "when": {}
+        }
+    ]
+}

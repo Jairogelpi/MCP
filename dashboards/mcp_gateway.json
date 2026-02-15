@@ -1,0 +1,95 @@
+{
+    "annotations": {
+        "list": []
+    },
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 0,
+    "links": [],
+    "liveNow": false,
+    "panels": [
+        {
+            "title": "Throughput (RPM)",
+            "type": "timeseries",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 0
+            },
+            "targets": [
+                {
+                    "expr": "sum(rate(mcp_request_received_total[1m])) by (tenant_id)",
+                    "legendFormat": "{{tenant_id}}"
+                }
+            ]
+        },
+        {
+            "title": "Error Rate",
+            "type": "timeseries",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 0
+            },
+            "targets": [
+                {
+                    "expr": "sum(rate(mcp_request_failed_total[1m])) by (event)",
+                    "legendFormat": "{{event}}"
+                }
+            ]
+        },
+        {
+            "title": "Latency (p95)",
+            "type": "timeseries",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 8
+            },
+            "targets": [
+                {
+                    "expr": "histogram_quantile(0.95, sum(rate(mcp_request_duration_seconds_bucket[5m])) by (le))"
+                }
+            ]
+        },
+        {
+            "title": "Reserved vs Settled (EUR)",
+            "type": "timeseries",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 8
+            },
+            "targets": [
+                {
+                    "expr": "sum(rate(mcp_ledger_reserved_total[5m]))",
+                    "legendFormat": "Reserved"
+                },
+                {
+                    "expr": "sum(rate(mcp_ledger_settled_total[5m]))",
+                    "legendFormat": "Settled"
+                }
+            ]
+        }
+    ],
+    "schemaVersion": 36,
+    "style": "dark",
+    "tags": [
+        "mcp",
+        "gateway"
+    ],
+    "templating": {
+        "list": []
+    },
+    "time": {
+        "from": "now-1h",
+        "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "",
+    "title": "MCP Gateway Overview"
+}

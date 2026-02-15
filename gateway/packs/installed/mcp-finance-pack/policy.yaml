@@ -1,0 +1,5 @@
+
+name: Finance Guardrails
+rules:
+  - if: "cost > 100.00"
+    then: "require_approval"

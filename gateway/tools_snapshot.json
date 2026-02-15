@@ -1,156 +1,44 @@
 [
   {
-    "name": "valid_tool",
-    "description": "A safe tool for testing",
+    "name": "get_balance",
+    "description": "Get account balance. Use account \"A1\" or \"A2\".",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "query": {
+        "account": {
           "type": "string"
         }
-      }
+      },
+      "required": [
+        "account"
+      ]
     },
     "upstreamId": "finance-core",
-    "schemaHash": "158c8c2cc20406aa168142cb92bfe9883816b56cb99ac11e8b00a4d0d8768de5"
+    "schemaHash": "15735545964d50acff69e20d0e221a1e48a52a56df3627b0b10c6183c1da4bc1"
   },
   {
-    "name": "dangerous_op",
-    "description": "A dangerous tool that should be blocked by policy",
-    "inputSchema": {},
-    "upstreamId": "finance-core",
-    "schemaHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
-  },
-  {
-    "name": "sensitive_op",
-    "description": "Tool that handles PII",
+    "name": "transfer",
+    "description": "Transfer funds between accounts.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "credit_card": {
+        "from": {
           "type": "string"
-        }
-      }
-    },
-    "upstreamId": "finance-core",
-    "schemaHash": "d3351ae3749994241d6aa5ad610e9be337abc4f779391b8ae39fd99d6f3c0017"
-  },
-  {
-    "name": "curl_op",
-    "description": "Tool that performs network requests",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "url": {
+        },
+        "to": {
           "type": "string"
-        }
-      }
-    },
-    "upstreamId": "finance-core",
-    "schemaHash": "a441fb0588518421ef077d93fc5f7259e8aec6f3a766d7f2cacdcdfe5b520c27"
-  },
-  {
-    "name": "search_op",
-    "description": "Tool for searching",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "limit": {
+        },
+        "amount": {
           "type": "number"
         }
-      }
+      },
+      "required": [
+        "from",
+        "to",
+        "amount"
+      ]
     },
     "upstreamId": "finance-core",
-    "schemaHash": "f473f0fd2d0085b9ecb591336fbdc27e3e28b50ca8aab0c93c50f70fc10132ac"
-  },
-  {
-    "name": "stream_test",
-    "description": "Tool for streaming",
-    "inputSchema": {},
-    "upstreamId": "finance-core",
-    "schemaHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
-  },
-  {
-    "name": "expensive_op",
-    "description": "A very expensive tool for testing approval workflows",
-    "inputSchema": {},
-    "upstreamId": "finance-core",
-    "schemaHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
-  },
-  {
-    "name": "valid_tool",
-    "description": "A safe tool for testing",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string"
-        }
-      }
-    },
-    "upstreamId": "network-service",
-    "schemaHash": "158c8c2cc20406aa168142cb92bfe9883816b56cb99ac11e8b00a4d0d8768de5"
-  },
-  {
-    "name": "dangerous_op",
-    "description": "A dangerous tool that should be blocked by policy",
-    "inputSchema": {},
-    "upstreamId": "network-service",
-    "schemaHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
-  },
-  {
-    "name": "sensitive_op",
-    "description": "Tool that handles PII",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "credit_card": {
-          "type": "string"
-        }
-      }
-    },
-    "upstreamId": "network-service",
-    "schemaHash": "d3351ae3749994241d6aa5ad610e9be337abc4f779391b8ae39fd99d6f3c0017"
-  },
-  {
-    "name": "curl_op",
-    "description": "Tool that performs network requests",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "url": {
-          "type": "string"
-        }
-      }
-    },
-    "upstreamId": "network-service",
-    "schemaHash": "a441fb0588518421ef077d93fc5f7259e8aec6f3a766d7f2cacdcdfe5b520c27"
-  },
-  {
-    "name": "search_op",
-    "description": "Tool for searching",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "limit": {
-          "type": "number"
-        }
-      }
-    },
-    "upstreamId": "network-service",
-    "schemaHash": "f473f0fd2d0085b9ecb591336fbdc27e3e28b50ca8aab0c93c50f70fc10132ac"
-  },
-  {
-    "name": "stream_test",
-    "description": "Tool for streaming",
-    "inputSchema": {},
-    "upstreamId": "network-service",
-    "schemaHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
-  },
-  {
-    "name": "expensive_op",
-    "description": "A very expensive tool for testing approval workflows",
-    "inputSchema": {},
-    "upstreamId": "network-service",
-    "schemaHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    "schemaHash": "b923e905c8b19bbfddf73717fc53c6b8f17255dfc0a904a9e9fff59c27ce648e"
   }
 ]

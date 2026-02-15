@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  gateway-1:
+    build: .
+    environment:
+      - PORT=3000
+      - LEDGER_FAIL_MODE=open
+      - NODE_ENV=production
+    volumes:
+      - ./mcp_gateway.db:/app/mcp_gateway.db
+    ports:
+      - "3000:3000"
+
+  gateway-2:
+    build: .
+    environment:
+      - PORT=3001
+      - LEDGER_FAIL_MODE=open
+      - NODE_ENV=production
+    volumes:
+      - ./mcp_gateway.db:/app/mcp_gateway.db
+    ports:
+      - "3001:3001"
+
+  # Minimal Mock Upstream for testing CB/Retries
+  mock-upstream:
+    image: node:18-alpine
+    command: >
+      node -e "
+      const http = require('http');
+      let failCount = 0;
+      http.createServer((req, res) => {
+        if (req.url === '/fail') {
+          res.writeHead(500);
+          res.end(JSON.stringify({ error: 'SIMULATED_FAILURE' }));
+        } else {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ result: { content: 'OK' } }));
+        }
+      }).listen(3001);
+      "
+    ports:
+      - "3002:3001"

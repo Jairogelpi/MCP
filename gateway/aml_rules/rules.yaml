@@ -1,0 +1,15 @@
+rules:
+  - id: "AML_HIGH_VELOCITY"
+    condition: "payout_count_24h > 50"
+    action: "FLAG_FOR_REVIEW"
+    severity: "HIGH"
+
+  - id: "AML_STRUCTURING"
+    condition: "amount > 9000 AND amount < 10000"
+    action: "FLAG_FOR_REVIEW"
+    severity: "MEDIUM"
+
+  - id: "SANCTIONS_COUNTRY"
+    condition: "payee_country IN ['KP', 'IR', 'CU', 'SY']"
+    action: "BLOCK"
+    severity: "CRITICAL"

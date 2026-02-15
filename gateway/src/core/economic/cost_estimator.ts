@@ -41,9 +41,15 @@ export class CostEstimator {
         let estimated_cost = 0;
 
         if (rate) {
-            const costIn = (estimated_tokens_in / 1000) * rate.input_price;
-            const costOut = (estimated_tokens_out / 1000) * rate.output_price;
-            estimated_cost = costIn + costOut + rate.flat_fee;
+            const inputPrice = rate.input_price || 0;
+            const outputPrice = rate.output_price || 0;
+            const flatFee = rate.flat_fee || 0;
+
+            const costIn = (estimated_tokens_in / 1000) * inputPrice;
+            const costOut = (estimated_tokens_out / 1000) * outputPrice;
+            estimated_cost = costIn + costOut + flatFee;
+
+            if (isNaN(estimated_cost)) estimated_cost = 0;
         } else {
             console.warn(`[ESTIMATOR] FAIL-SAFE: No pricing found for ${context.provider}:${context.model}:${context.endpoint}`);
             // Fail-safe: Signal missing price with -1

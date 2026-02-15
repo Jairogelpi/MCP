@@ -43,12 +43,16 @@ export class EgressTransformer {
     }
 
     private static isPrivateIP(ip: string): boolean {
+        // Cloud Metadata Service & link-local
+        if (ip.startsWith('169.254.')) return true;
         // 10.x.x.x
         if (ip.startsWith('10.')) return true;
         // 192.168.x.x
         if (ip.startsWith('192.168.')) return true;
         // 172.16.x.x - 172.31.x.x
         if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(ip)) return true;
+        // Carrier Grade NAT
+        if (ip.startsWith('100.64.')) return true;
         return false;
     }
 }

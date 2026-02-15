@@ -1,0 +1,21 @@
+# Default ABAC Ruleset
+rules:
+  - id: allow_list_tools
+    action: list_tools
+    effect: allow
+    priority: 10
+  
+  - id: redact_pii_emails
+    action: call_tool
+    effect: transform
+    priority: 20
+    transformer: pii_redactor
+    config:
+      patterns: ["email"]
+
+  - id: deny_unsafe_tools
+    action: call_tool
+    resource: "tool:delete_*"
+    effect: deny
+    priority: 100
+    message: "Critical administrative tools are blocked by default policy."

@@ -1,0 +1,29 @@
+apiVersion: mcp.market/v1
+kind: Registry
+metadata:
+  name: "Official MCP Marketplace"
+  updated: "2024-03-20T12:00:00Z"
+
+packages:
+  - id: "mcp-finance-pack"
+    version: "1.0.0"
+    type: "policy-pack"
+    description: "Standard financial controls: Spend Limits, PII Redaction, Invoice Reconciliation."
+    author: "MCP Foundation"
+    signature: "sig_ed25519_..."
+    assets:
+      - "policies/finance_guardrails.yaml"
+      - "templates/finance_budget.yaml"
+  
+  - id: "mcp-stripe-adapter"
+    version: "2.1.0"
+    type: "adapter"
+    description: "Certified Stripe Connector with automatic receipt generation."
+    author: "Stripe, Inc."
+    signature: "sig_ed25519_..."
+
+  - id: "mcp-healthcare-HIPAA"
+    version: "0.9.beta"
+    type: "compliance-pack"
+    description: "Strict PII filtering and Audit Retention policies for HIPAA."
+    author: "HealthTech Corp"

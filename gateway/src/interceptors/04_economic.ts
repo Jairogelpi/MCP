@@ -5,92 +5,139 @@ import { LedgerManager } from '../core/ledger/ledger_manager';
 const decider = new EconomicDecider();
 const ledger = LedgerManager.getInstance();
 
+import { trace, SpanStatusCode } from '@opentelemetry/api';
+
 export const economic: Interceptor = async (ctx) => {
-    console.log('[4] Economic Engine (Soft)');
+    const tracer = trace.getTracer('mcp-gateway');
+    return tracer.startActiveSpan('economic.estimate', async (span) => {
+        try {
+            console.log('[4] Economic Engine (Soft)');
 
-    const envelope = ctx.stepResults.normalized;
-    if (!envelope) return;
+            const envelope = ctx.stepResults.normalized;
+            if (!envelope) return;
 
-    // 1. Construct Input
-    const { tenant } = envelope.meta;
-    const projectHeader = ctx.request.headers['x-project-id'] as string;
-    const project = projectHeader || 'project:default';
-    const scopes = [`tenant:${tenant}`, project];
+            // 1. Construct Input
+            const { tenant } = envelope.meta;
+            const projectHeader = ctx.request.headers['x-project-id'] as string;
+            const project = projectHeader || 'project:default';
+            const scopes = [`tenant:${tenant}`, project];
 
-    // Pricing Context
-    let pricingContext: any = { provider: 'internal', tier: 'standard' };
-    if (envelope.action === 'dangerous_op' || envelope.action === 'sensitive_op') {
-        pricingContext = { provider: 'openai', model: 'gpt-4' };
-    } else if (envelope.action === 'expensive_op') {
-        pricingContext = { provider: 'internal', endpoint: 'expensive_op' };
-    }
+            // Pricing Context
+            let pricingContext: any = { provider: 'internal', tier: 'standard' };
+            if (envelope.action === 'dangerous_op' || envelope.action === 'sensitive_op') {
+                pricingContext = { provider: 'openai', model: 'gpt-4' };
+            } else if (envelope.action === 'expensive_op') {
+                pricingContext = { provider: 'internal', endpoint: 'expensive_op' };
+            }
 
-    // 2. Evaluate
-    const decision = await decider.evaluate({
-        tenant_id: tenant,
-        budget_scopes: scopes,
-        tool_name: envelope.action,
-        args: envelope.parameters,
-        pricing_context: pricingContext
-    });
+            // 2. Evaluate
+            const decision = await decider.evaluate({
+                tenant_id: tenant,
+                budget_scopes: scopes,
+                tool_name: envelope.action,
+                args: envelope.parameters,
+                pricing_context: pricingContext
+            });
 
-    console.log(`[ECON] Outcome: ${decision.outcome}, Cost: ${decision.estimated_cost.toFixed(4)} ${decision.currency}, Reason: ${decision.reason_codes.join(',')}`);
+            console.log(`[ECON] Outcome: ${decision.outcome}, Cost: ${decision.estimated_cost.toFixed(4)} ${decision.currency}, Reason: ${decision.reason_codes.join(',')}`);
 
-    // 3. Enforce
-    if (decision.outcome === 'deny') {
-        const errorMsg = `Economic Block: ${decision.reason_codes.join(', ')} (Scope: ${decision.budget_scope_failed})`;
-        console.warn(`[ECON] ${errorMsg}`);
-        ctx.stepResults.error = {
-            code: decision.reason_codes[0],
-            message: errorMsg,
-            status: 402 // Payment Required
-        };
-        throw new Error(decision.reason_codes[0]);
-    }
+            const { logger } = require('../core/logger');
+            logger.info('economic_evaluated', {
+                tenant_id: tenant,
+                tool_name: envelope.action,
+                outcome: decision.outcome,
+                cost_estimated: decision.estimated_cost,
+                currency: decision.currency,
+                budget_scopes: scopes
+            });
 
-    if (decision.outcome === 'require_approval') {
-        const errorMsg = `Approval Required: ${decision.reason_codes.join(', ')}`;
-        console.warn(`[ECON] ${errorMsg}`);
-        ctx.stepResults.error = {
-            code: 'APPROVAL_REQUIRED',
-            message: errorMsg,
-            status: 402
-        };
-        throw new Error('APPROVAL_REQUIRED');
-    }
+            span.setAttribute('econ.estimated_cost', decision.estimated_cost);
+            span.setAttribute('econ.currency', decision.currency);
+            span.setAttribute('econ.outcome', decision.outcome);
 
-    if (decision.outcome === 'degrade') {
-        if (decision.patch) {
-            console.warn(`[ECON] DEGRADING Request: ${JSON.stringify(decision.patch)}`);
-            Object.assign(envelope.parameters, decision.patch);
+            // 3. Enforce
+            if (decision.outcome === 'deny') {
+                const errorMsg = `Economic Block: ${decision.reason_codes.join(', ')} (Scope: ${decision.budget_scope_failed})`;
+                logger.warn('economic_denied', {
+                    tenant_id: tenant,
+                    tool_name: envelope.action,
+                    reasons: decision.reason_codes,
+                    scope_failed: decision.budget_scope_failed
+                });
+
+                ctx.stepResults.error = {
+                    code: decision.reason_codes[0],
+                    message: errorMsg,
+                    status: 402 // Payment Required
+                };
+                throw new Error(decision.reason_codes[0]);
+            }
+
+            if (decision.outcome === 'require_approval') {
+                const errorMsg = `Approval Required: ${decision.reason_codes.join(', ')}`;
+                logger.info('approval_required', {
+                    tenant_id: tenant,
+                    tool_name: envelope.action,
+                    reasons: decision.reason_codes
+                });
+                ctx.stepResults.error = {
+                    code: 'APPROVAL_REQUIRED',
+                    message: errorMsg,
+                    status: 402
+                };
+                throw new Error('APPROVAL_REQUIRED');
+            }
+
+            if (decision.outcome === 'degrade') {
+                if (decision.patch) {
+                    logger.warn('economic_degraded', {
+                        tenant_id: tenant,
+                        tool_name: envelope.action,
+                        patch: decision.patch
+                    });
+                    Object.assign(envelope.parameters, decision.patch);
+                }
+            }
+
+            // 4. Reserve Funds (Ledger)
+            const reserveResult = await ledger.reserve({
+                requestId: envelope.id,
+                tenantId: tenant,
+                budgetScopes: scopes,
+                amount: decision.estimated_cost,
+                currency: decision.currency,
+                meta: { tool: envelope.action, scopes }
+            });
+
+            if (!reserveResult.success) {
+                const errorMsg = `Ledger Reservation Failed: ${reserveResult.error}`;
+                logger.error('ledger_reservation_failed', {
+                    tenant_id: tenant,
+                    request_id: envelope.id,
+                    error: reserveResult.error
+                });
+                ctx.stepResults.error = {
+                    code: 'LEDGER_CONFLICT',
+                    message: errorMsg,
+                    status: 409
+                };
+                throw new Error('LEDGER_CONFLICT');
+            }
+
+            // Pass info to downstream (Settlement)
+            if (!ctx.stepResults.economic) ctx.stepResults.economic = { cost: 0, currency: 'EUR' };
+            ctx.stepResults.economic.cost = decision.estimated_cost;
+            ctx.stepResults.economic.currency = decision.currency;
+            ctx.stepResults.economic.reserve_id = reserveResult.reserveId;
+            ctx.stepResults.economic.budget_scopes = scopes;
+
+            span.setStatus({ code: SpanStatusCode.OK });
+        } catch (err: any) {
+            span.recordException(err);
+            span.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
+            throw err;
+        } finally {
+            span.end();
         }
-    }
-
-    // 4. Reserve Funds (Ledger)
-    const reserveResult = ledger.reserve({
-        requestId: envelope.id,
-        tenantId: tenant,
-        budgetScopes: scopes,
-        amount: decision.estimated_cost,
-        currency: decision.currency,
-        meta: { tool: envelope.action, scopes }
     });
-
-    if (!reserveResult.success) {
-        const errorMsg = `Ledger Reservation Failed: ${reserveResult.error}`;
-        console.warn(`[ECON] ${errorMsg}`);
-        ctx.stepResults.error = {
-            code: 'LEDGER_CONFLICT',
-            message: errorMsg,
-            status: 409
-        };
-        throw new Error('LEDGER_CONFLICT');
-    }
-
-    // Pass info to downstream (Settlement)
-    if (!ctx.stepResults.economic) ctx.stepResults.economic = { cost: 0, currency: 'EUR' };
-    ctx.stepResults.economic.cost = decision.estimated_cost;
-    ctx.stepResults.economic.currency = decision.currency;
-    ctx.stepResults.economic.reserve_id = reserveResult.reserveId;
-    ctx.stepResults.economic.budget_scopes = scopes;
 };

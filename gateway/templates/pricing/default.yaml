@@ -1,0 +1,10 @@
+# Default Pricing Version (v1)
+version: "v1"
+tiers:
+  - tool_match: "*"
+    unit: "tokens"
+    input_price: 0.00001 # per token
+    output_price: 0.00003
+  - tool_match: "finance-core/*"
+    unit: "calls"
+    fixed_price: 0.01 # 1 cent per call

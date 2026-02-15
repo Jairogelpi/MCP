@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  gateway:
+    build:
+      context: ..
+      dockerfile: gateway/Dockerfile
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/mcp_ledger
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - LEDGER_FAIL_MODE=closed
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+      - otel-collector
+
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=mcp_ledger
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    restart: always
+    volumes:
+      - ./otel-collector.yaml:/etc/otel-collector-config.yaml
+    command: ["--config=/etc/otel-collector-config.yaml"]
+
+  # LGTM Stack (Simplified for "1-command" prod trial)
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./observability-stack/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  pgdata:

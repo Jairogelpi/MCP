@@ -166,6 +166,7 @@ export interface Receipt {
 export interface PipelineContext {
     request: FastifyRequest;
     reply: FastifyReply;
+    identity?: any; // User Identity (Role, Scopes)
     stepResults: {
         raw?: any;
         normalized?: ActionEnvelope;

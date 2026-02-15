@@ -22,16 +22,20 @@ export class RateLimitManager {
     };
 
     public checkLimits(context: { agentId: string; tenantId: string }, usage: { tokens: number; cost: number }): boolean {
+        // Sanitize inputs
+        const tokens = isNaN(usage.tokens) ? 0 : usage.tokens;
+        const cost = isNaN(usage.cost) ? 0 : usage.cost;
+
         // 1. Check Agent Token Limit
         const tokenKey = `agent:${context.agentId}:tokens_min`;
         const tokenAllowed = db.rates.checkAndIncrement(
             tokenKey,
-            usage.tokens,
+            tokens,
             this.LIMITS.tokens_min.limit,
             this.LIMITS.tokens_min.window
         );
         if (!tokenAllowed) {
-            console.warn(`[RATE] Token Limit Exceeded for ${context.agentId} (${usage.tokens} tokens)`);
+            console.warn(`[RATE] Token Limit Exceeded for ${context.agentId} (${tokens} tokens)`);
             return false;
         }
 
@@ -39,7 +43,7 @@ export class RateLimitManager {
         const costKey = `tenant:${context.tenantId}:cost_hour`;
         const costAllowed = db.rates.checkAndIncrement(
             costKey,
-            usage.cost,
+            cost,
             this.LIMITS.cost_hour.limit,
             this.LIMITS.cost_hour.window
         );
