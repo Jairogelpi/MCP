@@ -45,5 +45,11 @@ export function seedEnterpriseIAM() {
         INSERT OR IGNORE INTO iam_keys (key_id, key_hash, user_id, tenant_id, scopes, status, expires_at, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `, ['mcp_demo_01', demoHash, 'u_demo', 'demo-client', '*', 'active', expiry, now]);
+
+    db.raw.run(`
+        INSERT OR IGNORE INTO tenant_members (tenant_id, user_id, role_id, status, joined_at)
+        VALUES (?, ?, ?, ?, ?)
+    `, ['demo-client', 'u_demo', 'role_admin', 'active', now]);
+
     console.log(`   Demo Key Secret:   ${demoSecret}`);
 }

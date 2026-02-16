@@ -18,17 +18,13 @@ export const economic: Interceptor = async (ctx) => {
 
             // 1. Construct Input
             const { tenant } = envelope.meta;
-            const projectHeader = ctx.request.headers['x-project-id'] as string;
-            const project = projectHeader || 'project:default';
-            const scopes = [`tenant:${tenant}`, project];
+            const identity = ctx.identity;
 
-            // Pricing Context
-            let pricingContext: any = { provider: 'internal', tier: 'standard' };
-            if (envelope.action === 'dangerous_op' || envelope.action === 'sensitive_op') {
-                pricingContext = { provider: 'openai', model: 'gpt-4' };
-            } else if (envelope.action === 'expensive_op') {
-                pricingContext = { provider: 'internal', endpoint: 'expensive_op' };
+            const scopes = [`tool:${envelope.action}`, `user:${identity?.userId || 'anon'}`];
+            if (identity?.deptId) {
+                scopes.push(`dept:${identity.deptId}`);
             }
+            scopes.push(`tenant:${tenant}`);
 
             // 2. Evaluate
             const decision = await decider.evaluate({
@@ -36,7 +32,7 @@ export const economic: Interceptor = async (ctx) => {
                 budget_scopes: scopes,
                 tool_name: envelope.action,
                 args: envelope.parameters,
-                pricing_context: pricingContext
+                pricing_context: { provider: 'dynamic' } // Let the decider resolve from DB
             });
 
             console.log(`[ECON] Outcome: ${decision.outcome}, Cost: ${decision.estimated_cost.toFixed(4)} ${decision.currency}, Reason: ${decision.reason_codes.join(',')}`);

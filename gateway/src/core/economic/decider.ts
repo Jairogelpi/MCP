@@ -1,5 +1,6 @@
 import { BudgetManager, BudgetStatus } from './budget_manager';
 import { CostEstimator } from './cost_estimator';
+import { PricingManager } from './pricing_manager';
 import { DegradationManager } from './degradation_manager';
 import { RateLimitManager } from './rate_limit_manager';
 
@@ -42,10 +43,25 @@ export class EconomicDecider {
     private rateLimiter = RateLimitManager.getInstance();
 
     public async evaluate(input: EconomicInput): Promise<EconomicDecision> {
-        // 1. Estimate
+        // 1. Resolve Dynamic Context if necessary
+        let context = input.pricing_context;
+        let estimated_tokens_out = 500;
+
+        if (context.provider === 'dynamic') {
+            const resolved = await PricingManager.getInstance().resolveContext(input.tool_name);
+            context = {
+                provider: resolved.provider,
+                model: resolved.model,
+                tier: resolved.tier
+            };
+            estimated_tokens_out = resolved.estimated_tokens_out;
+        }
+
+        // 2. Estimate
         const estimate = this.estimator.estimate({
-            ...input.pricing_context,
-            endpoint: input.tool_name
+            ...context,
+            endpoint: input.tool_name,
+            estimated_tokens_out
         }, input.args);
 
         // Fail-safe Check
@@ -79,7 +95,7 @@ export class EconomicDecider {
         }
 
         // 3. Budget Check
-        const budgetCheck = this.budgets.checkBudget(input.budget_scopes, estimate.estimated_cost);
+        const budgetCheck = await this.budgets.checkBudget(input.budget_scopes, estimate.estimated_cost);
 
         // 3. Hard Limit -> STOP
         if (budgetCheck.status === BudgetStatus.HARD_LIMIT_EXCEEDED) {

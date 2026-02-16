@@ -18,7 +18,7 @@ export const normalize: Interceptor = async (ctx) => {
         meta: {
             timestamp: Date.now(),
             source: (ctx.request.ip) || 'unknown',
-            tenant: routeMeta.tenant || 'unknown',
+            tenant: ctx.identity?.tenantId || routeMeta.tenant || 'unknown',
             targetServer: routeMeta.server || 'unknown',
             authContext: authContext // Map auth context
         }

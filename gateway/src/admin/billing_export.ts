@@ -18,28 +18,28 @@ async function exportBilling(tenantId?: string) {
 
     // 1. Usage Daily CSV (Aggregated)
     const usageQuery = `
-        SELECT date(created_at/1000, 'unixepoch') as day, status as type, sum(amount_settled) as total 
-        FROM ledger_transactions 
+        SELECT date(created_at/1000, 'unixepoch') as day, status as type, sum(amount) as total 
+        FROM ledger_entries 
         WHERE tenant_id = ? AND status = "SETTLED"
         GROUP BY 1, 2
     `;
-    const usage = db.raw.query(usageQuery, [tenantId]) as any[];
+    const usage = await db.raw.query(usageQuery, [tenantId]) as any[];
     const usageCsv = "day,type,total_amount\n" + usage.map(u => `${u.day},${u.type},${u.total}`).join('\n');
     fs.writeFileSync(path.join(outDir, `usage_${tenantId}_${timestamp}.csv`), usageCsv);
 
     // 2. Receipts NDJSON (Audit trail)
-    const receipts = db.raw.query('SELECT receipt_json FROM ledger_receipts WHERE tenant_id = ?', [tenantId]) as any[];
+    const receipts = await db.raw.query('SELECT receipt_json FROM ledger_receipts WHERE tenant_id = ?', [tenantId]) as any[];
     const receiptsNdjson = receipts.map(r => r.receipt_json).join('\n');
     fs.writeFileSync(path.join(outDir, `receipts_${tenantId}_${timestamp}.ndjson`), receiptsNdjson);
 
     // 3. Invoice Lines CSV
     const invoiceQuery = `
-        SELECT tenant_id, "Platform Usage" as concept, sum(amount_settled) as qty, 1.0 as unit_price, sum(amount_settled) as total
-        FROM ledger_transactions
+        SELECT tenant_id, "Platform Usage" as concept, sum(amount) as qty, 1.0 as unit_price, sum(amount) as total
+        FROM ledger_entries
         WHERE tenant_id = ? AND status = "SETTLED"
         GROUP BY 1
     `;
-    const invoice = db.raw.query(invoiceQuery, [tenantId]) as any[];
+    const invoice = await db.raw.query(invoiceQuery, [tenantId]) as any[];
     const invoiceCsv = "tenant,period,concept,qty,unit_price,total\n" +
         invoice.map(i => `${i.tenant_id},${new Date().toISOString().slice(0, 7)},${i.concept},${i.qty},${i.unit_price},${i.total}`).join('\n');
     fs.writeFileSync(path.join(outDir, `invoice_${tenantId}_${timestamp}.csv`), invoiceCsv);

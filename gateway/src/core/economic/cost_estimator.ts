@@ -21,18 +21,15 @@ export class CostEstimator {
     }
 
     public estimate(
-        context: { provider: string; model?: string; endpoint?: string; tier?: string },
+        context: { provider: string; model?: string; endpoint?: string; tier?: string; estimated_tokens_out?: number },
         args: any
     ): CostEstimation {
         // 1. Calculate Tokens (Deterministic Heuristic)
-        // Heuristic: 1 token ~= 4 chars (English)
-        // Serialize args deterministically/stably if possible, but JSON.stringify is "good enough" for MVP if keys order doesn't vary wildly.
         const jsonArgs = JSON.stringify(args || {});
-        // Using Math.ceil to ensure at least 1 token if non-empty
         const estimated_tokens_in = jsonArgs.length > 0 ? Math.ceil(jsonArgs.length / 4) : 0;
 
-        // Output heuristic: Assume 500 tokens output for avg tool response unless specified otherwise
-        const estimated_tokens_out = 500;
+        // Use provided output estimate or fallback to 500
+        const estimated_tokens_out = context.estimated_tokens_out || 500;
 
         // 2. Get Rate
         const rate = this.pricing.getPrice(context);

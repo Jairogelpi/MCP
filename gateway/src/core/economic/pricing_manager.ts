@@ -46,6 +46,31 @@ export class PricingManager {
         };
     }
 
+    /**
+     * Resolves the real-world pricing context (provider, model, tier) for a tool name.
+     * Eliminates hardcoded tool mappings.
+     */
+    public async resolveContext(toolName: string): Promise<{ provider: string; model: string; tier: string; estimated_tokens_out: number }> {
+        const rows = await db.raw.query(`
+            SELECT * FROM tool_settings 
+            WHERE tool_name = ? OR tool_name = '*' 
+            ORDER BY (CASE WHEN tool_name = ? THEN 1 ELSE 0 END) DESC 
+            LIMIT 1
+        `, [toolName, toolName]);
+
+        const setting = rows[0];
+        if (!setting) {
+            return { provider: 'internal', model: '*', tier: 'standard', estimated_tokens_out: 500 };
+        }
+
+        return {
+            provider: setting.provider,
+            model: setting.model,
+            tier: setting.tier,
+            estimated_tokens_out: setting.estimated_tokens_out
+        };
+    }
+
     public getCurrency(): string {
         return 'EUR';
     }

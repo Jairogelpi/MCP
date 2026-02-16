@@ -11,8 +11,8 @@ async function runTest() {
         stdio: 'pipe' // Capture output
     });
 
-    server.stdout?.on('data', (data) => console.log(`[SERVER]: ${data}`));
-    server.stderr?.on('data', (data) => console.error(`[SERVER ERR]: ${data}`));
+    server.stdout?.on('data', (data: Buffer | string) => console.log(`[SERVER]: ${data}`));
+    server.stderr?.on('data', (data: Buffer | string) => console.error(`[SERVER ERR]: ${data}`));
 
     // Wait for server to be ready
     await new Promise(resolve => setTimeout(resolve, 3000));

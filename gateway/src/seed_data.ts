@@ -10,94 +10,55 @@ export async function seedData() {
     await db.raw.run('DELETE FROM ledger_reservations');
     await db.raw.run('DELETE FROM budget_spending');
 
-    // Budgets
+    // Hierarchical Governance Examples (Fase 2)
     const budgets = [
-        // Tenant ACME
+        // 1. Tool-specific limit (e.g. expensive_op is capped for everyone)
+        {
+            id: 'tool:expensive_op',
+            scope_type: 'tool',
+            scope_id: 'expensive_op',
+            period: 'monthly',
+            hard_limit: 50.00,
+            soft_limit: 40.00,
+            currency: 'EUR',
+            active_from: Date.now(),
+            active_to: null,
+            created_at: Date.now()
+        },
+        // 2. Department-specific limit (e.g. Engineering dept)
+        {
+            id: 'dept:engineering',
+            scope_type: 'department',
+            scope_id: 'engineering',
+            period: 'monthly',
+            hard_limit: 500.00,
+            soft_limit: 400.00,
+            currency: 'EUR',
+            active_from: Date.now(),
+            active_to: null,
+            created_at: Date.now()
+        },
+        // 3. User-specific limit (e.g. specific agent budget)
+        {
+            id: 'user:u_demo_agent',
+            scope_type: 'user',
+            scope_id: 'u_demo_agent',
+            period: 'monthly',
+            hard_limit: 10.00,
+            soft_limit: 8.00,
+            currency: 'EUR',
+            active_from: Date.now(),
+            active_to: null,
+            created_at: Date.now()
+        },
+        // Standard Tenants
         {
             id: 'tenant:acme',
             scope_type: 'tenant',
             scope_id: 'acme',
             period: 'monthly',
-            hard_limit: 100.00,
-            soft_limit: 80.00,
-            currency: 'EUR',
-            active_from: Date.now(),
-            active_to: null,
-            created_at: Date.now()
-        },
-        // Tenant Demo Client
-        {
-            id: 'tenant:demo-client',
-            scope_type: 'tenant',
-            scope_id: 'demo-client',
-            period: 'monthly',
             hard_limit: 1000.00,
             soft_limit: 800.00,
-            currency: 'EUR',
-            active_from: Date.now(),
-            active_to: null,
-            created_at: Date.now()
-        },
-        // Default Project
-        {
-            id: 'project:default',
-            scope_type: 'project',
-            scope_id: 'default',
-            period: 'monthly',
-            hard_limit: 100.00,
-            soft_limit: 80.00,
-            currency: 'EUR',
-            active_from: Date.now(),
-            active_to: null,
-            created_at: Date.now()
-        },
-        // Alpha Project (Limited)
-        {
-            id: 'project:alpha',
-            scope_type: 'project',
-            scope_id: 'alpha',
-            period: 'monthly',
-            hard_limit: 100.00,
-            soft_limit: 5.00, // Trigger degrade test
-            currency: 'EUR',
-            active_from: Date.now(),
-            active_to: null,
-            created_at: Date.now()
-        },
-        // Poor Project (Very Limited)
-        {
-            id: 'project:poor',
-            scope_type: 'project',
-            scope_id: 'poor',
-            period: 'monthly',
-            hard_limit: 1.00, // Fail quickly
-            soft_limit: 0.50,
-            currency: 'EUR',
-            active_from: Date.now(),
-            active_to: null,
-            created_at: Date.now()
-        },
-        // Stress Test Project (Concurrency)
-        {
-            id: 'project:concurrency',
-            scope_type: 'project',
-            scope_id: 'concurrency',
-            period: 'monthly',
-            hard_limit: 0.20, // Allow 20 reqs @ 0.01
-            soft_limit: 0.15,
-            currency: 'EUR',
-            active_from: Date.now(),
-            active_to: null,
-            created_at: Date.now()
-        },
-        // Stress Test Project (Strict)
-        {
-            id: 'project:stress_test',
-            scope_type: 'project',
-            scope_id: 'stress_test',
-            period: 'monthly',
-            hard_limit: 20.00,
-            soft_limit: 15.00,
             currency: 'EUR',
             active_from: Date.now(),
             active_to: null,

@@ -6,6 +6,7 @@ export type UserRole = 'admin' | 'viewer' | 'operator';
 export interface Identity {
     userId: string;
     tenantId: string;
+    deptId?: string;
     role: string;
     scopes: string[];
 }
@@ -29,31 +30,38 @@ export class IdentityManager {
             SELECT k.*, u.name as user_name 
             FROM iam_keys k
             JOIN iam_users u ON k.user_id = u.user_id
-            WHERE k.key_hash = ? AND k.status = 'active' AND k.expires_at > ?
-        `, [keyHash, Date.now()]);
+            WHERE (k.key_hash = ? OR k.key_id = ?) AND k.status = 'active' AND k.expires_at > ?
+        `, [keyHash, rawKey, Date.now()]);
 
         const keyRow = keyRows[0];
 
         if (!keyRow) return null;
 
-        // Fetch roles for the user
+        // Fetch membership details within the tenant (Role and Department)
+        const membershipRows = await db.raw.query(`
+            SELECT role_id, dept_id, status
+            FROM tenant_members
+            WHERE tenant_id = ? AND user_id = ?
+        `, [keyRow.tenant_id, keyRow.user_id]);
+
+        const membership = membershipRows[0];
+
+        // Use organization-specific role if available, fallback to global role
         const roles = await db.raw.query(`
-            SELECT r.name 
-            FROM iam_roles r
-            JOIN iam_user_roles ur ON r.role_id = ur.role_id
-            WHERE ur.user_id = ?
-        `, [keyRow.user_id]);
+            SELECT name 
+            FROM iam_roles 
+            WHERE role_id = ?
+        `, [membership?.role_id || 'role_viewer']);
 
         // Fetch permissions (scopes) for the roles
         const perms = await db.raw.query(`
             SELECT p.scope_name 
             FROM iam_permissions p
             JOIN iam_role_permissions rp ON p.perm_id = rp.perm_id
-            JOIN iam_user_roles ur ON rp.role_id = ur.role_id
-            WHERE ur.user_id = ?
-        `, [keyRow.user_id]);
+            WHERE rp.role_id = ?
+        `, [membership?.role_id || 'role_viewer']);
 
-        const role = roles.length > 0 ? roles[0].name : 'viewer';
+        const roleName = roles.length > 0 ? roles[0].name.toLowerCase() : 'viewer';
         const scopes = Array.from(new Set([
             ...keyRow.scopes.split(','),
             ...perms.map(p => p.scope_name)
@@ -62,7 +70,8 @@ export class IdentityManager {
         return {
             userId: keyRow.user_id,
             tenantId: keyRow.tenant_id,
-            role: role,
+            deptId: membership?.dept_id || undefined,
+            role: roleName,
             scopes: scopes.includes('*') ? ['*'] : scopes
         };
     }
@@ -74,5 +83,12 @@ export class IdentityManager {
         if (identity.role === 'admin') return true;
         if (identity.scopes.includes('*')) return true;
         return identity.scopes.includes(requiredScope);
+    }
+
+    /**
+     * Checks if the identity is a system-wide administrator.
+     */
+    static isGlobalAdmin(identity: Identity): boolean {
+        return identity.tenantId === 'acme' && identity.role === 'admin';
     }
 }

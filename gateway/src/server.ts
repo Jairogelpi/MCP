@@ -1,4 +1,5 @@
 import Fastify, { FastifyInstance } from 'fastify';
+import cors from '@fastify/cors';
 import { pipelineRunner } from './core/pipeline';
 import { PipelineContext } from './core/contract';
 import { auth } from './interceptors/00_auth';
@@ -21,6 +22,7 @@ import { PipelineRunner } from './core/pipeline';
 import { startTelemetry } from './telemetry';
 import { trace, metrics, SpanStatusCode } from '@opentelemetry/api';
 import { registerAdminRoutes } from './admin/api_routes';
+import { registerAuthRoutes } from './admin/auth_api';
 
 // Start Telemetry ASAP
 startTelemetry();
@@ -30,6 +32,14 @@ const meter = metrics.getMeter('mcp-gateway');
 const requestCounter = meter.createCounter('mcp_requests_total', { description: 'Total MCP requests' });
 
 const server: FastifyInstance = Fastify({ logger: true });
+
+// Enable CORS
+server.register(cors, {
+    origin: true, // In production, should be restricted to specific domains
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
+    credentials: true
+});
 
 // --- CONFIGURATION ---
 const UPSTREAMS = [
@@ -234,7 +244,9 @@ server.post('/mcp/:tenant/:server', async (request, reply) => {
 const start = async () => {
     try {
         await initializeCatalog();
+        // Register routes
         registerAdminRoutes(server);
+        registerAuthRoutes(server);
         const { seedData } = require('./seed_data');
         await seedData();
 

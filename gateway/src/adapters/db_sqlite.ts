@@ -31,7 +31,12 @@ export class SqliteAdapter implements DatabaseAdapter {
             { name: '012_iam_robust', path: path.resolve(__dirname, '../../migrations/012_iam_robust.sql') },
             { name: '013_audit_log', path: path.resolve(__dirname, '../../migrations/013_audit_log.sql') },
             { name: '014_billing_engine', path: path.resolve(__dirname, '../../migrations/014_billing_engine.sql') },
-            { name: '015_settlement', path: path.resolve(__dirname, '../../migrations/015_settlement.sql') }
+            { name: '015_settlement', path: path.resolve(__dirname, '../../migrations/015_settlement.sql') },
+            { name: '016_auth_expansion', path: path.resolve(__dirname, '../../migrations/016_auth_expansion.sql') },
+            { name: '017_multi_tenant_expansion', path: path.resolve(__dirname, '../../migrations/017_multi_tenant_expansion.sql') },
+            { name: '018_granular_governance', path: path.resolve(__dirname, '../../migrations/018_granular_governance.sql') },
+            { name: '019_real_governance', path: path.resolve(__dirname, '../../migrations/019_real_governance.sql') },
+            { name: '020_tenant_settings', path: path.resolve(__dirname, '../../migrations/020_tenant_settings.sql') }
         ];
 
         for (const m of migrations) {

@@ -16,13 +16,13 @@ export enum BudgetStatus {
     HARD_LIMIT_EXCEEDED = 'HARD_LIMIT_EXCEEDED'
 }
 
-// Deterministic Check Order: Tool > Session > Agent > Project > Tenant
 const SCOPE_PRIORITY: Record<string, number> = {
     'tool': 1,
-    'session': 2,
-    'agent': 3,
-    'project': 4,
-    'tenant': 5
+    'user': 2,
+    'dept': 3,
+    'tenant': 4,
+    'session': 5,
+    'project': 6
 };
 
 export class BudgetManager {
@@ -46,26 +46,32 @@ export class BudgetManager {
         });
     }
 
-    public getBudget(scopeId: string): BudgetContext | undefined {
-        const row = db.ledger.getAccount(scopeId) as any;
+    public async getBudget(scopeId: string): Promise<BudgetContext | undefined> {
+        const row = await db.ledger.getAccount(scopeId) as any;
         if (!row) return undefined;
+
+        // Calculate real Monthly Period
+        const now = new Date();
+        const periodStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+        const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
+
         return {
             id: row.account_id,
             hard_limit: row.hard_limit,
             soft_limit: row.soft_limit,
             spend: row.settled_total,
             currency: row.currency,
-            period_start: 0, // Ledger v2 doesn't track periods yet
-            period_end: 0
+            period_start: periodStart,
+            period_end: periodEnd
         };
     }
 
     // Check if adding cost would exceed limits (without committing)
-    public checkBudget(scopes: string[], estimatedCost: number): { status: BudgetStatus; failedScope?: string } {
+    public async checkBudget(scopes: string[], estimatedCost: number): Promise<{ status: BudgetStatus; failedScope?: string }> {
         const sortedScopes = this.sortScopes(scopes);
 
         for (const scope of sortedScopes) {
-            const row = db.ledger.getAccount(scope) as any;
+            const row = await db.ledger.getAccount(scope) as any;
             if (!row) continue;
 
             // Use unified ledger state

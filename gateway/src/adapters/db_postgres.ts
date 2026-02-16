@@ -33,7 +33,8 @@ export class PostgresAdapter implements DatabaseAdapter {
             { name: '012_iam_robust', path: path.resolve(__dirname, '../../migrations/012_iam_robust.sql') },
             { name: '013_audit_log', path: path.resolve(__dirname, '../../migrations/013_audit_log.sql') },
             { name: '014_billing_engine', path: path.resolve(__dirname, '../../migrations/014_billing_engine.sql') },
-            { name: '015_settlement', path: path.resolve(__dirname, '../../migrations/015_settlement.sql') }
+            { name: '015_settlement', path: path.resolve(__dirname, '../../migrations/015_settlement.sql') },
+            { name: '016_auth_expansion', path: path.resolve(__dirname, '../../migrations/016_auth_expansion.sql') }
         ];
 
         const client = await this.pool.connect();
