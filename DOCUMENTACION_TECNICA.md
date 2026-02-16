@@ -28,12 +28,15 @@ Optimizado para una latencia extremadamente baja (~165ms) manteniendo máxima se
 - **Pipeline de Interceptores**: El `PipelineRunner` pasa el contexto (`stepResults`) de forma eficiente entre fases (seguridad, economía, ejecución, liquidación).
 - **Patrón Saga (Rollback Automático)**: Si una operación falla después de reservar fondos, el sistema ejecuta automáticamente `ledger.void()`. Esto garantiza que nunca se cobre por una operación fallida.
 
-## 4. Verificación de Integridad (`verify_concurrency.ts`)
+## 4. Gobernanza Soberana (Zero-Heuristics)
 
-El sistema incluye herramientas para validar su propia robustez.
+El sistema ha evolucionado de un modelo de "detección" a uno de "atrapamiento determinista".
 
-- **Pruebas de Estrés**: Simulación de 50 peticiones concurrentes con retardos aleatorios para forzar condiciones de carrera.
-- **Auditoría Retroactiva**: Scripts que recorren la cadena desde el último hash hasta el bloque génesis para asegurar que la integridad matemática no se ha visto comprometida.
+- **El Sandbox Soberano (`sovereign_sandbox.ts`)**: Implementa la validación de estados post-ejecución. No intenta adivinar si un prompt es malicioso; en su lugar, verifica que la transición de estado resultante (ej. deltas en el ledger) cumpla con todas las leyes del sistema antes de permitir el commit final.
+- **La Jaula de Hierro (`iron_cage.ts`)**: Actúa como un interceptor dual que aplica leyes de pre-condición (Invariantes) y supervisa la ejecución en el sandbox.
+- **Aislamiento Cero-Confianza**: Se han eliminado por completo el WAF y el Sentinel de IA para garantizar que la seguridad sea puramente matemática y no probabilística, reduciendo la superficie de ataque y la latencia operativa.
+
+## 5. Verificación de Integridad (`verify_concurrency.ts`)
 
 ---
 
@@ -41,7 +44,7 @@ El sistema incluye herramientas para validar su propia robustez.
 
 La arquitectura implementa tres pilares fundamentales:
 1. **Inmutabilidad**: Vía encadenamiento de hashes.
-2. **Seguridad**: Vía interceptores explícitos.
+2. **Determinismo**: Vía gobernanza soberana y sandbox de estado.
 3. **Economía**: Vía un motor de decisiones autónomo.
 
-Es una plataforma diseñada para que los agentes de IA operen con capital real de forma segura y auditable.
+Es una plataforma de grado bancario diseñada para que los agentes de IA operen con capital real bajo leyes físicas de negocio inquebrantables.

@@ -182,6 +182,12 @@ export interface PipelineContext {
             endpoint?: string;
         }; // New field
         upstream?: UpstreamResponse;
+        sentinel?: {
+            score: number;
+            action: 'ALLOW' | 'BLOCK' | 'FLAG';
+            reason: string;
+            model?: string;
+        };
         receipt?: Receipt;
         error?: {
             code: string;

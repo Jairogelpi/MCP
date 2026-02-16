@@ -4,7 +4,7 @@ import { PipelineContext } from './core/contract';
 import { auth } from './interceptors/00_auth';
 import { parseValidate } from './interceptors/01_parse_validate';
 import { normalize } from './interceptors/02_normalize';
-import { waf } from './interceptors/02b_waf';
+import { ironCage } from './interceptors/02e_iron_cage';
 import { rateLimit } from './interceptors/02c_rate_limit';
 import { policy } from './interceptors/03_policy';
 import { economic } from './interceptors/04_economic';
@@ -140,7 +140,7 @@ server.post('/mcp/:tenant/:server', async (request, reply) => {
         const runner = new PipelineRunner();
 
         // Register interceptors
-        [auth, parseValidate, normalize, waf, rateLimit, policy, economic, forward, capture, receiptInteractor, telemetry, settlement, audit].forEach(i => runner.use(i));
+        [auth, parseValidate, normalize, ironCage, rateLimit, policy, economic, forward, capture, receiptInteractor, telemetry, settlement, audit].forEach(i => runner.use(i));
 
         try {
             await runner.run(context);

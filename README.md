@@ -8,10 +8,10 @@ Este no es un prototipo. Es una implementación real, endurecida para producció
 
 A diferencia de los SDK de MCP estándar, este Gateway proporciona la "Capa Faltante" requerida para una operación serie:
 
-### 1. 🛡️ Seguridad y Gobernanza
-- **RBAC e IAM**: Claves de API granulares con permisos específicos (Admin vs Visor).
-- **Anti-Fraude**: Motor de detección heurística para bloquear prompts o herramientas maliciosas.
-- **Verificación**: `RevocationManager` aplica políticas de editores y bloquea paquetes prohibidos.
+### 1. 🛡️ Gobernanza Soberana (Zero-Heuristics)
+- **El Sandbox Soberano**: Seguridad Determinista de Estado. Elimina todas las heurísticas e IA. Valida atómicamente cada transición de estado (ej. cambios en el saldo) antes de que la transacción se consume.
+- **La Jaula de Hierro**: Cumplimiento de Invariantes de Negocio y Jaula de Capacidades matemáticas.
+- **Libro Mayor Inmutable**: Cada acción es verificada contra leyes físicas de contabilidad financiera.
 
 ### 2. 💰 Rieles Financieros (Dinero Real)
 - **Motor de Liquidación**: Agrega el uso y calcula los pagos para los desarrolladores de Agentes.
@@ -32,6 +32,8 @@ A diferencia de los SDK de MCP estándar, este Gateway proporciona la "Capa Falt
 
 ## 📖 Documentación Detallada (En Español)
 
+- [Guía del Usuario Final (Instalación y Configuración)](GUIA_USUARIO_FINAL.md)
+- [Integración Universal (API, Cloud y SaaS)](GUIA_INTEGRACION_UNIVERSAL.md)
 - [Análisis Técnico de la Arquitectura](DOCUMENTACION_TECNICA.md)
 - [Guía de Inicio Rápido (Gateway)](gateway/README.md)
 
