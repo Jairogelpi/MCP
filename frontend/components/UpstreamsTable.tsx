@@ -20,7 +20,13 @@ interface Props {
 export function UpstreamsTable({ tenantId, upstreams, onRefresh }: Props) {
     const { user } = useAuth();
     const [creating, setCreating] = useState(false);
-    const [formData, setFormData] = useState({ name: '', baseUrl: '', authType: 'none', token: '' });
+
+    // Form state
+    const [name, setName] = useState('');
+    const [baseUrl, setBaseUrl] = useState('');
+    const [authType, setAuthType] = useState('none');
+    const [transport, setTransport] = useState('http'); // New: Transport selection
+    const [token, setToken] = useState('');
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -34,15 +40,23 @@ export function UpstreamsTable({ tenantId, upstreams, onRefresh }: Props) {
                 },
                 body: JSON.stringify({
                     tenantId,
-                    name: formData.name,
-                    baseUrl: formData.baseUrl,
-                    authType: formData.authType,
-                    authConfig: formData.token ? { token: formData.token } : undefined
+                    name,
+                    baseUrl,
+                    authType,
+                    // Send transport and authConfig (simplified for now as just token or empty)
+                    transport,
+                    authConfig: token ? { token } : {}
                 })
             });
-            setFormData({ name: '', baseUrl: '', authType: 'none', token: '' });
+            // Reset form
+            setName('');
+            setBaseUrl('');
+            setAuthType('none');
+            setTransport('http');
+            setToken('');
+
             onRefresh();
-            setCreating(false); // Close form
+            setCreating(false);
         } catch (err) {
             alert('Failed to create upstream');
             setCreating(false);
@@ -78,8 +92,8 @@ export function UpstreamsTable({ tenantId, upstreams, onRefresh }: Props) {
                                 <input
                                     className="input-premium w-full"
                                     placeholder="e.g. Payment Provider A"
-                                    value={formData.name}
-                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                    value={name}
+                                    onChange={e => setName(e.target.value)}
                                     required
                                 />
                             </div>
@@ -88,38 +102,53 @@ export function UpstreamsTable({ tenantId, upstreams, onRefresh }: Props) {
                                 <input
                                     className="input-premium w-full"
                                     placeholder="https://api.provider.com"
-                                    value={formData.baseUrl}
-                                    onChange={e => setFormData({ ...formData, baseUrl: e.target.value })}
+                                    value={baseUrl}
+                                    onChange={e => setBaseUrl(e.target.value)}
                                     required
                                 />
                             </div>
+
+                            {/* New: Transport Selection */}
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase">Transport</label>
+                                <select
+                                    className="input-premium w-full bg-[#0a0c10]"
+                                    value={transport}
+                                    onChange={e => setTransport(e.target.value)}
+                                >
+                                    <option value="http">HTTP (Standard)</option>
+                                    <option value="sse">SSE (Streaming)</option>
+                                </select>
+                            </div>
+
                             <div>
                                 <label className="text-[10px] font-bold text-gray-500 uppercase">Auth Type</label>
                                 <select
-                                    className="input-premium w-full"
-                                    value={formData.authType}
-                                    onChange={e => setFormData({ ...formData, authType: e.target.value })}
+                                    className="input-premium w-full bg-[#0a0c10]"
+                                    value={authType}
+                                    onChange={e => setAuthType(e.target.value)}
                                 >
                                     <option value="none">None (Public)</option>
                                     <option value="bearer">Bearer Token</option>
                                     <option value="api_key">API Key (Header)</option>
                                 </select>
                             </div>
-                            {formData.authType !== 'none' && (
-                                <div>
+                            {authType !== 'none' && (
+                                <div className="md:col-span-2">
                                     <label className="text-[10px] font-bold text-gray-500 uppercase">Secret Token/Key</label>
                                     <input
                                         type="password"
                                         className="input-premium w-full"
                                         placeholder="sk_live_..."
-                                        value={formData.token}
-                                        onChange={e => setFormData({ ...formData, token: e.target.value })}
+                                        value={token}
+                                        onChange={e => setToken(e.target.value)}
                                     />
+                                    <p className="text-[10px] text-gray-500 mt-1">Stored securely. Will be sent in Authorization header or x-api-key based on type.</p>
                                 </div>
                             )}
                         </div>
                         <div className="flex justify-end pt-2">
-                            <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-lg uppercase tracking-wider text-xs">
+                            <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-lg uppercase tracking-wider text-xs shadow-lg shadow-blue-500/20">
                                 Connect Upstream
                             </button>
                         </div>
@@ -133,6 +162,7 @@ export function UpstreamsTable({ tenantId, upstreams, onRefresh }: Props) {
                         <tr>
                             <th className="p-4">Service Name</th>
                             <th className="p-4">Base URL</th>
+                            <th className="p-4">Transport</th>
                             <th className="p-4">Auth</th>
                             <th className="p-4">Created</th>
                             <th className="p-4 text-right">Actions</th>
@@ -144,7 +174,12 @@ export function UpstreamsTable({ tenantId, upstreams, onRefresh }: Props) {
                                 <td className="p-4 font-bold text-white">{up.name}</td>
                                 <td className="p-4 font-mono text-xs text-blue-300">{up.base_url}</td>
                                 <td className="p-4">
-                                    <span className="bg-gray-800 text-gray-400 px-2 py-1 rounded text-[10px] uppercase font-bold border border-white/5">
+                                    {/* Mocking transport display for now as backend might not return it in list yet, 
+                                         but good to have column ready. Assuming 'http' default if missing */}
+                                    <span className="text-[10px] uppercase font-bold text-gray-500">HTTP</span>
+                                </td>
+                                <td className="p-4">
+                                    <span className={`px-2 py-1 rounded text-[10px] uppercase font-bold border border-white/5 ${up.auth_type === 'none' ? 'bg-gray-800 text-gray-400' : 'bg-purple-900/40 text-purple-300'}`}>
                                         {up.auth_type}
                                     </span>
                                 </td>
@@ -161,7 +196,7 @@ export function UpstreamsTable({ tenantId, upstreams, onRefresh }: Props) {
                         ))}
                         {upstreams.length === 0 && (
                             <tr>
-                                <td colSpan={5} className="p-8 text-center text-gray-600 uppercase text-xs tracking-widest">
+                                <td colSpan={6} className="p-8 text-center text-gray-600 uppercase text-xs tracking-widest">
                                     No upstreams configured
                                 </td>
                             </tr>

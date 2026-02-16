@@ -10,8 +10,15 @@ import { QuickstartGenerator } from '../../../components/QuickstartGenerator';
 export default function APIKeysPage() {
     const { user } = useAuth();
     const { currentOrg } = useOrganization();
-    const [keys, setKeys] = useState([]);
+
+    // State for data
+    const [keys, setKeys] = useState<any[]>([]);
+    const [upstreams, setUpstreams] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
+
+    // State for Quickstart selection
+    const [selectedUpstream, setSelectedUpstream] = useState<string>('');
+    const [selectedKey, setSelectedKey] = useState<string>('');
 
     const fetchKeys = async () => {
         if (!user || !currentOrg) return;
@@ -21,7 +28,12 @@ export default function APIKeysPage() {
                 headers: { 'Authorization': `Bearer ${user.token}` }
             });
             const data = await res.json();
-            setKeys(data.keys || []);
+            const keysList = data.keys || [];
+            setKeys(keysList);
+            // Default to first key if nothing selected
+            if (keysList.length > 0 && !selectedKey) {
+                setSelectedKey(keysList[0].key_id);
+            }
         } catch (err) {
             console.error(err);
         } finally {
@@ -29,8 +41,29 @@ export default function APIKeysPage() {
         }
     };
 
+    const fetchUpstreams = async () => {
+        if (!user || !currentOrg) return;
+        try {
+            const res = await fetch(`http://localhost:3000/admin/org/${currentOrg.tenant_id}/upstreams`, {
+                headers: { 'Authorization': `Bearer ${user.token}` }
+            });
+            const data = await res.json();
+            const list = data.upstreams || [];
+            setUpstreams(list);
+            // Default to first upstream if nothing selected
+            if (list.length > 0 && !selectedUpstream) {
+                setSelectedUpstream(list[0].name);
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
     useEffect(() => {
-        fetchKeys();
+        if (user && currentOrg) {
+            fetchKeys();
+            fetchUpstreams();
+        }
     }, [user, currentOrg]);
 
     if (!currentOrg) {
@@ -65,8 +98,32 @@ export default function APIKeysPage() {
             </div>
 
             <div className="space-y-4">
-                <h3 className="text-xl font-bold text-white uppercase italic tracking-tighter">Integration Snippet</h3>
-                <QuickstartGenerator tenantId={currentOrg.tenant_id} />
+                <div className="flex justify-between items-end">
+                    <h3 className="text-xl font-bold text-white uppercase italic tracking-tighter">Integration Snippet</h3>
+                    <div className="flex gap-2">
+                        <select
+                            className="bg-black/40 border border-white/10 text-xs text-gray-300 rounded px-2 py-1 outline-none focus:border-blue-500"
+                            value={selectedUpstream}
+                            onChange={e => setSelectedUpstream(e.target.value)}
+                        >
+                            {upstreams.length === 0 && <option value="">No Upstreams</option>}
+                            {upstreams.map(u => <option key={u.name} value={u.name}>{u.name}</option>)}
+                        </select>
+                        <select
+                            className="bg-black/40 border border-white/10 text-xs text-gray-300 rounded px-2 py-1 outline-none focus:border-blue-500"
+                            value={selectedKey}
+                            onChange={e => setSelectedKey(e.target.value)}
+                        >
+                            {keys.length === 0 && <option value="">No Keys</option>}
+                            {keys.map((k: any) => <option key={k.key_id} value={k.key_id}>{k.key_id.substring(0, 8)}...</option>)}
+                        </select>
+                    </div>
+                </div>
+                <QuickstartGenerator
+                    tenantId={currentOrg.tenant_id}
+                    upstreamName={selectedUpstream || 'your-upstream'}
+                    apiKey={selectedKey ? `(replace_with_secret_for_${selectedKey.substring(0, 8)}...)` : 'sk_live_...'}
+                />
             </div>
 
             {loading ? (

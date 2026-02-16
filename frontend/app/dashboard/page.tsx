@@ -382,13 +382,22 @@ export default function DashboardPage() {
                         <h3 className="text-xl font-bold text-white uppercase italic tracking-tight mb-2">Upstream Gateways</h3>
                         <p className="text-xs text-gray-500 font-mono">Configure routing to external MCP Servers and APIs. Manage authentication and base URLs.</p>
                     </Link>
-                    <Link href="/dashboard/activity" className="glass p-8 rounded-3xl hover:bg-white/5 transition-all group border border-white/5 hover:border-emerald-500/30 md:col-span-2">
+                    <Link href="/dashboard/activity" className="glass p-8 rounded-3xl hover:bg-white/5 transition-all group border border-white/5 hover:border-emerald-500/30">
                         <div className="flex justify-between items-start mb-4">
                             <div className="p-4 bg-emerald-600/20 rounded-2xl text-2xl group-hover:scale-110 transition-transform">📊</div>
                             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest group-hover:text-emerald-400">Observability</span>
                         </div>
                         <h3 className="text-xl font-bold text-white uppercase italic tracking-tight mb-2">Live Activity Log</h3>
                         <p className="text-xs text-gray-500 font-mono">Real-time inspection of Core Contract interactions. View latencies, receipts, and policy decisions.</p>
+                    </Link>
+
+                    <Link href="/dashboard/playground" className="glass p-8 rounded-3xl hover:bg-white/5 transition-all group border border-white/5 hover:border-pink-500/30">
+                        <div className="flex justify-between items-start mb-4">
+                            <div className="p-4 bg-pink-600/20 rounded-2xl text-2xl group-hover:scale-110 transition-transform">🎮</div>
+                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest group-hover:text-pink-400">Test Lab</span>
+                        </div>
+                        <h3 className="text-xl font-bold text-white uppercase italic tracking-tight mb-2">Contract Playground</h3>
+                        <p className="text-xs text-gray-500 font-mono">Interactive JSON-RPC builder with AJV schema validation and SSE response visualization.</p>
                     </Link>
                 </div>
             </div>
