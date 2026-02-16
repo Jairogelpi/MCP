@@ -1,0 +1,24 @@
+# Security
+private.pem
+public.pem
+keys.json
+keys_old.json
+
+# Environment
+.env
+.env.local
+
+# Builds
+dist/
+build/
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db

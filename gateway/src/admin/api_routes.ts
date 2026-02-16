@@ -52,26 +52,28 @@ export function registerAdminRoutes(server: FastifyInstance) {
      * Creates a new hashed API key.
      */
     server.post('/admin/api-keys', { preHandler: [adminAuth] }, async (request, reply) => {
-        // In a real system, this endpoint itself would be protected by an admin key.
-        // For Phase 8.2 verification, we assume the caller is authorized.
-        const { userId, tenantId, scopes, expiresDays } = request.body as any;
+        const { tenantId, deploymentId } = request.body as any;
+        const identity = (request as any).identity as Identity;
 
-        if (!userId || !tenantId) return reply.status(400).send({ error: 'Missing userId or tenantId' });
+        if (!tenantId) return reply.status(400).send({ error: 'Missing tenantId' });
 
-        const secret = crypto.randomBytes(32).toString('hex');
-        const keyHash = IdentityManager.hashKey(secret);
-        const keyId = `mcp_${crypto.randomBytes(4).toString('hex')}`;
-        const expiresAt = Date.now() + (expiresDays || 30) * 24 * 60 * 60 * 1000;
+        // Generate secure key
+        const secret = crypto.randomBytes(32).toString('hex'); // High entropy
+        const newKeyId = `k_${crypto.randomBytes(4).toString('hex')}`;
+        const keyHash = crypto.createHash('sha256').update(secret).digest('hex'); // We only store hash
+        const now = Date.now();
+        const expiry = now + (365 * 24 * 60 * 60 * 1000); // 1 year default
 
         await db.raw.run(`
-            INSERT INTO iam_keys (key_id, key_hash, user_id, tenant_id, scopes, expires_at, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        `, [keyId, keyHash, userId, tenantId, scopes || '', expiresAt, Date.now()]);
+            INSERT INTO iam_keys (key_id, key_hash, user_id, tenant_id, deployment_id, scopes, status, expires_at, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [newKeyId, keyHash, identity.userId, tenantId, deploymentId || null, '*', 'active', expiry, now]);
 
+        // Return the SECRET only once
         return {
-            key_id: keyId,
-            secret: secret, // RETURN ONCE
-            expires_at: new Date(expiresAt).toISOString()
+            new_key_id: newKeyId,
+            secret: secret,
+            status: 'active'
         };
     });
 
@@ -110,13 +112,18 @@ export function registerAdminRoutes(server: FastifyInstance) {
      * GET /admin/api-keys/:tenantId
      * Lists all keys for a tenant.
      */
+    /**
+     * GET /admin/api-keys/:tenantId
+     * Lists all keys for a tenant.
+     */
     server.get('/admin/api-keys/:tenantId', { preHandler: [adminAuth] }, async (request, reply) => {
         const { tenantId } = request.params as any;
         const keys = await db.raw.query(`
-            SELECT key_id, user_id, tenant_id, scopes, status, expires_at, created_at
-            FROM iam_keys
-            WHERE tenant_id = ? AND status != 'revoked'
-            ORDER BY created_at DESC
+            SELECT k.key_id, k.user_id, k.tenant_id, k.scopes, k.status, k.expires_at, k.created_at, d.name as deployment_name, d.environment
+            FROM iam_keys k
+            LEFT JOIN deployments d ON k.deployment_id = d.id
+            WHERE k.tenant_id = ? AND k.status != 'revoked'
+            ORDER BY k.created_at DESC
         `, [tenantId]);
         return { keys };
     });
@@ -181,6 +188,13 @@ export function registerAdminRoutes(server: FastifyInstance) {
                 hard_limit: initialBudget || 100.0,
                 soft_limit: (initialBudget || 100.0) * 0.8
             });
+
+            // 5. Create Default 'Production' Deployment
+            const depId = `d_${crypto.randomBytes(4).toString('hex')}`;
+            await db.raw.run(`
+                INSERT INTO deployments (id, tenant_id, name, environment, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            `, [depId, tenantId, 'Production Gateway', 'prod', now]);
         });
 
         return { success: true, tenant_id: tenantId };
@@ -269,6 +283,69 @@ export function registerAdminRoutes(server: FastifyInstance) {
 
         const tenants = await db.raw.query(query, params);
         return { tenants };
+    });
+
+    /**
+     * GET /admin/org/:id/deployments
+     */
+    server.get('/admin/org/:id/deployments', { preHandler: [adminAuth] }, async (request, reply) => {
+        const { id } = request.params as any;
+        const deployments = await db.raw.query('SELECT * FROM deployments WHERE tenant_id = ? ORDER BY created_at DESC', [id]);
+        return { deployments };
+    });
+
+    /**
+     * POST /admin/deployments
+     */
+    server.post('/admin/deployments', { preHandler: [adminAuth] }, async (request, reply) => {
+        const { tenantId, name, environment } = request.body as any;
+        if (!tenantId || !name || !environment) return reply.status(400).send({ error: 'Missing fields' });
+
+        const id = `d_${crypto.randomBytes(4).toString('hex')}`;
+        const now = Date.now();
+
+        await db.raw.run(`
+            INSERT INTO deployments (id, tenant_id, name, environment, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        `, [id, tenantId, name, environment, now]);
+
+        return { id, name, environment };
+    });
+
+    /**
+     * GET /admin/org/:id/upstreams
+     */
+    server.get('/admin/org/:id/upstreams', { preHandler: [adminAuth] }, async (request, reply) => {
+        const { id } = request.params as any;
+        const upstreams = await db.raw.query('SELECT * FROM upstreams WHERE tenant_id = ? ORDER BY created_at DESC', [id]);
+        return { upstreams };
+    });
+
+    /**
+     * POST /admin/upstreams
+     */
+    server.post('/admin/upstreams', { preHandler: [adminAuth] }, async (request, reply) => {
+        const { tenantId, name, baseUrl, authType, authConfig } = request.body as any;
+        if (!tenantId || !name || !baseUrl) return reply.status(400).send({ error: 'Missing fields' });
+
+        const id = `ups_${crypto.randomBytes(4).toString('hex')}`;
+        const now = Date.now();
+
+        await db.raw.run(`
+            INSERT INTO upstreams (id, tenant_id, name, base_url, auth_type, auth_config, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [id, tenantId, name, baseUrl, authType || 'none', authConfig ? JSON.stringify(authConfig) : null, now]);
+
+        return { id, name, baseUrl };
+    });
+
+    /**
+     * DELETE /admin/upstreams/:id
+     */
+    server.delete('/admin/upstreams/:id', { preHandler: [adminAuth] }, async (request, reply) => {
+        const { id } = request.params as any;
+        await db.raw.run('DELETE FROM upstreams WHERE id = ?', [id]);
+        return { success: true };
     });
 
     /**

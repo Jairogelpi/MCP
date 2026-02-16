@@ -36,7 +36,9 @@ export class SqliteAdapter implements DatabaseAdapter {
             { name: '017_multi_tenant_expansion', path: path.resolve(__dirname, '../../migrations/017_multi_tenant_expansion.sql') },
             { name: '018_granular_governance', path: path.resolve(__dirname, '../../migrations/018_granular_governance.sql') },
             { name: '019_real_governance', path: path.resolve(__dirname, '../../migrations/019_real_governance.sql') },
-            { name: '020_tenant_settings', path: path.resolve(__dirname, '../../migrations/020_tenant_settings.sql') }
+            { name: '020_tenant_settings', path: path.resolve(__dirname, '../../migrations/020_tenant_settings.sql') },
+            { name: '021_deployments', path: path.resolve(__dirname, '../../migrations/021_deployments.sql') },
+            { name: '022_upstreams', path: path.resolve(__dirname, '../../migrations/022_upstreams.sql') }
         ];
 
         for (const m of migrations) {

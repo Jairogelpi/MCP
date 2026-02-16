@@ -248,7 +248,11 @@ const start = async () => {
         registerAdminRoutes(server);
         registerAuthRoutes(server);
         const { seedData } = require('./seed_data');
-        await seedData();
+        try {
+            await seedData();
+        } catch (seedErr: any) {
+            console.error('[SEED] Warning: Seed data failed (non-fatal):', seedErr.message);
+        }
 
         // Start Ledger Reaper (Phase 4.5)
         setInterval(() => {

@@ -4,6 +4,18 @@ import { IdentityManager } from './core/auth/identity_manager';
 export function seedEnterpriseIAM() {
     console.log('[SEED] Seeding Enterprise IAM...');
 
+    // 0. Ensure Tenants Exist
+    const seedNow = Date.now();
+    db.raw.run(`
+        INSERT OR IGNORE INTO tenants (tenant_id, name, owner_id, status, created_at, updated_at)
+        VALUES ('acme', 'ACME Corp', 'u_admin', 'active', ?, ?)
+    `, [seedNow, seedNow]);
+
+    db.raw.run(`
+        INSERT OR IGNORE INTO tenants (tenant_id, name, owner_id, status, created_at, updated_at)
+        VALUES ('demo-client', 'Demo Client', 'u_demo', 'active', ?, ?)
+    `, [seedNow, seedNow]);
+
     // 1. Create Users
     db.raw.run("INSERT OR IGNORE INTO iam_users (user_id, name) VALUES ('u_admin', 'Master Admin')");
     db.raw.run("INSERT OR IGNORE INTO iam_users (user_id, name) VALUES ('u_viewer', 'Auditor Viewer')");
