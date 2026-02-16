@@ -161,6 +161,9 @@ export default function DashboardPage() {
                             <Link href="/dashboard/organization" className="text-xs font-bold text-gray-100 hover:text-white transition-colors uppercase tracking-widest bg-blue-600/20 px-6 py-3 rounded-xl border border-blue-500/30">
                                 Control de Acceso e IAM
                             </Link>
+                            <Link href="/dashboard/specs" className="text-xs font-bold text-gray-400 hover:text-white transition-colors uppercase tracking-widest px-4 py-3 hover:bg-white/5 rounded-xl">
+                                Contracts
+                            </Link>
                         </>
                     )}
                     <Link href="/" className="text-xs font-bold text-gray-500 hover:text-white transition-colors uppercase tracking-widest border border-white/10 px-6 py-3 rounded-xl hover:bg-white/5">
@@ -355,6 +358,38 @@ export default function DashboardPage() {
                             </div>
                         </div>
                     ))}
+                </div>
+            </div>
+
+            {/* Grid 3: DevOps Console (Phase 2.6) */}
+            <div className="space-y-6">
+                <h2 className="text-2xl font-black text-white italic tracking-tighter uppercase underline decoration-purple-500/40 decoration-4 underline-offset-8">DevOps Console</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Link href="/dashboard/api-keys" className="glass p-8 rounded-3xl hover:bg-white/5 transition-all group border border-white/5 hover:border-blue-500/30">
+                        <div className="flex justify-between items-start mb-4">
+                            <div className="p-4 bg-blue-600/20 rounded-2xl text-2xl group-hover:scale-110 transition-transform">🔑</div>
+                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest group-hover:text-blue-400">Access Control</span>
+                        </div>
+                        <h3 className="text-xl font-bold text-white uppercase italic tracking-tight mb-2">API Keys & Credentials</h3>
+                        <p className="text-xs text-gray-500 font-mono">Manage programmatic access for your applications. Rotate secrets and revoke compromised keys.</p>
+                    </Link>
+
+                    <Link href="/dashboard/upstreams" className="glass p-8 rounded-3xl hover:bg-white/5 transition-all group border border-white/5 hover:border-purple-500/30">
+                        <div className="flex justify-between items-start mb-4">
+                            <div className="p-4 bg-purple-600/20 rounded-2xl text-2xl group-hover:scale-110 transition-transform">📡</div>
+                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest group-hover:text-purple-400">Connectivity</span>
+                        </div>
+                        <h3 className="text-xl font-bold text-white uppercase italic tracking-tight mb-2">Upstream Gateways</h3>
+                        <p className="text-xs text-gray-500 font-mono">Configure routing to external MCP Servers and APIs. Manage authentication and base URLs.</p>
+                    </Link>
+                    <Link href="/dashboard/activity" className="glass p-8 rounded-3xl hover:bg-white/5 transition-all group border border-white/5 hover:border-emerald-500/30 md:col-span-2">
+                        <div className="flex justify-between items-start mb-4">
+                            <div className="p-4 bg-emerald-600/20 rounded-2xl text-2xl group-hover:scale-110 transition-transform">📊</div>
+                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest group-hover:text-emerald-400">Observability</span>
+                        </div>
+                        <h3 className="text-xl font-bold text-white uppercase italic tracking-tight mb-2">Live Activity Log</h3>
+                        <p className="text-xs text-gray-500 font-mono">Real-time inspection of Core Contract interactions. View latencies, receipts, and policy decisions.</p>
+                    </Link>
                 </div>
             </div>
 

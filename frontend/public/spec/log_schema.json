@@ -1,0 +1,79 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "MCP Gateway Structured Log",
+    "type": "object",
+    "required": [
+        "timestamp",
+        "level",
+        "trace_id",
+        "request_id",
+        "tenant_id",
+        "component"
+    ],
+    "properties": {
+        "timestamp": {
+            "type": "string",
+            "format": "date-time"
+        },
+        "level": {
+            "type": "string",
+            "enum": [
+                "debug",
+                "info",
+                "warn",
+                "error"
+            ]
+        },
+        "trace_id": {
+            "type": "string",
+            "description": "OpenTelemetry Trace ID"
+        },
+        "request_id": {
+            "type": "string",
+            "description": "Gateway Request ID"
+        },
+        "tenant_id": {
+            "type": "string"
+        },
+        "component": {
+            "type": "string",
+            "description": "Module name (e.g. policy, ledger)"
+        },
+        "tool_name": {
+            "type": "string"
+        },
+        "event": {
+            "type": "string",
+            "description": "High level event name (e.g. decision_made)"
+        },
+        "decision": {
+            "type": "string",
+            "enum": [
+                "allow",
+                "deny",
+                "transform",
+                "error"
+            ]
+        },
+        "cost_estimated": {
+            "type": "number"
+        },
+        "cost_settled": {
+            "type": "number"
+        },
+        "currency": {
+            "type": "string",
+            "default": "EUR"
+        },
+        "error_code": {
+            "type": "string"
+        },
+        "receipt_id": {
+            "type": "string"
+        },
+        "meta": {
+            "type": "object",
+            "additionalProperties": true
+        }
+    }
+}

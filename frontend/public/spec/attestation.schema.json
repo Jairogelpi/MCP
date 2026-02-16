@@ -1,0 +1,45 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "MCP Receipt Attestation",
+    "type": "object",
+    "properties": {
+        "issuer": {
+            "type": "string",
+            "description": "DID of the Notary/CA"
+        },
+        "issued_at": {
+            "type": "integer",
+            "description": "Unix timestamp"
+        },
+        "scope": {
+            "type": "string",
+            "description": "Tenant or Batch ID covered"
+        },
+        "subjects": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "description": "List of Receipt Hashes verified"
+        },
+        "assertion": {
+            "type": "string",
+            "enum": [
+                "VALID",
+                "REVOKED",
+                "AUDITED"
+            ]
+        },
+        "signature": {
+            "type": "string",
+            "description": "Ed25519 signature of the canonical JSON"
+        }
+    },
+    "required": [
+        "issuer",
+        "issued_at",
+        "subjects",
+        "assertion",
+        "signature"
+    ]
+}
