@@ -19,5 +19,5 @@ try {
 
     console.log(`Pair Valid: ${verified}`);
 } catch (e) {
-    console.error('Key check error:', e.message);
+    console.error('Key check error:', (e as Error).message);
 }

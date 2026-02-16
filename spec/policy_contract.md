@@ -1,63 +1,57 @@
-# Policy Contract Specification
-**Version**: v0.1.0
-**Status**: DRAFT
+# Policy Contract (v0.1.0)
 
-## 1. Contexto
-Este documento define el contrato estricto de entrada y salida del **Policy Decision Point (PDP)**.
-El **PEP (Interceptor)** debe conformar el request a este formato de entrada y respetar estrictamente la estructura de salida.
+## Overview
+This document defines the interface between the Gateway (PEP) and the Policy Engine (PDP). It ensures that all access control decisions are made using a standardized input/output format, regardless of the underlying policy logic (RBAC, ABAC, ReGo, etc.).
 
-## 2. PDP Inputs (Entrada)
-El PEP debe extraer y normalizar la siguiente información del `ActionEnvelope`:
+## 1. Policy Decision Point (PDP) Input
 
-| Campo | Tipo | Obligatorio | Descripción |
-|---|---|---|---|
-| `tenant_id` | string | **Sí** | Identificador del inquilino (e.g. `acme`). |
-| `project_id` | string | No | Sub-división o proyecto origen. |
-| `agent_id` | string | **Sí** | Identidad del agente invocador (Client ID / User ID). |
-| `session_id` | string | No | Identificador de trazabilidad de sesión/conversación. |
-| `upstream_server_id` | string | **Sí** | Identificador del servidor MCP destino (e.g. `finance-core`). |
-| `mcp_method` | string | **Sí** | Método MCP (e.g. `tools/call`, `resources/read`). |
-| `tool_name` | string | **Sí** (si tool) | Nombre de la herramienta invocada (e.g. `get_balance`). |
-| `args` | object | **Sí** | Argumentos completos de la llamada. |
-| `input_schema_hash` | string | No | Hash SHA256 del esquema de entrada para validación de integridad. |
-| `risk_class` | string | No | Clasificación preliminar de riesgo (e.g. `low`, `high`). |
-| `timestamp` | number | **Sí** | Timestamp UNIX del evento. |
-| `request_id` | string | **Sí** | ID único de la petición (Trace ID). |
+The PDP receives a context object derived from the `ActionEnvelope` and enriched with identity and catalog metadata.
 
-## 3. PDP Output (Decisión)
-El motor de políticas retornará una estructura **PolicyDecision**:
+| Field | Type | Description | Source |
+| :--- | :--- | :--- | :--- |
+| `tenant_id` | string | Organization ID owning the request. | Envelope `meta.tenant` |
+| `project_id` | string? | (Optional) Project context. | Envelope `meta.project` |
+| `agent_id` | string? | (Optional) Agent making the call. | Envelope `meta.agent` |
+| `user_role` | string | Role of the authenticated user (e.g., `admin`, `member`). | Identity Context |
+| `upstream_server_id` | string | Target MCP server name. | Envelope `meta.targetServer` |
+| `mcp_method` | string | The JSON-RPC method (e.g., `tools/call`). | Request Body |
+| `tool_name` | string | Name of the tool being called. | Request Body `params.name` |
+| `args` | object | The arguments passed to the tool. | Request Body `params.arguments` |
+| `input_schema_hash` | string? | (Optional) Hash of the tool's input schema at runtime. | Catalog Lookup |
+| `risk_class` | string | Risk classification of the tool (`low`, `medium`, `high`, `critical`). | Catalog Lookup |
+| `timestamp` | integer | Request timestamp (ms). | Envelope `meta.timestamp` |
+| `request_id` | string | Unique Request ID. | Envelope `id` |
 
-```typescript
-type RuleEffect = 'allow' | 'deny' | 'transform';
+## 2. Policy Decision Point (PDP) Output
 
-interface PolicyDecision {
-  decision: RuleEffect;
-  reason_codes: string[];      // Lista de códigos de razón (mínimo 1)
-  transform_patch?: object;    // RFC 6902 JSON Patch o Partial Merge (solo si transform)
-  obligations?: string[];      // Acciones colaterales obligatorias
-}
-```
+The PDP must return a decision object for every evaluation.
 
-### Obligaciones Estándar
-- `log_sensitive_event`: Requiere auditoría extendida.
-- `require_https`: Fuerza transporte seguro.
-- `notify_admin`: Requiere alerta asíncrona.
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `decision` | string | `ALLOW` \| `DENY` \| `TRANSFORM` |
+| `reason_codes` | string[] | List of codes explaining the decision (Required). |
+| `transform_patch` | object? | (If `TRANSFORM`) JSON Patch or merge object to modify `args`. |
+| `obligations` | string[]? | Post-decision actions required (e.g., `log_audit`, `require_2fa`, `encrypt_result`). |
 
-## 4. Reason Codes Estándar
-Códigos inmutables para categorizar decisiones.
+## 3. Standard Reason Codes
 
-| Código | Descripción |
-|---|---|
-| `FORBIDDEN_TOOL` | La herramienta solicitada no está permitida para este agente/tenant. |
-| `BUDGET_HARD_LIMIT` | Presupuesto agotado (ver Economic Engine). |
-| `PII_DETECTED` | Se ha detectado Información Personal Identificable en los argumentos. |
-| `SSRF_BLOCKED` | Intento de acceso a red privada o no permitida. |
-| `ARGS_LIMIT_ENFORCED` | Argumentos exceden límites definidos (length, count, value). |
-| `TENANT_SCOPE_VIOLATION` | Intento de acceso a recursos fuera del tenant. |
-| `SCHEMA_MISMATCH` | Los argumentos no cumplen con el esquema de la política. |
-| `DEFAULT_ALLOW` | Permitido por defecto (sin regla específica de bloqueo). |
-| `DEFAULT_DENY` | Bloqueado por defecto (sin regla específica de permiso). |
+These codes are immutable and must be used by the Frontend and Telemetry systems to categorize decisions.
 
-## 5. Freeze Criteria
-- [ ] Implementación del modelo de datos en `src/core/contract.ts`.
-- [ ] Tests de contrato validando estos inputs/outputs.
+### Blocking / Deny Codes
+| Code | Description |
+| :--- | :--- |
+| `FORBIDDEN_TOOL` | The user/role is not explicitly authorized to use this tool. |
+| `BUDGET_HARD_LIMIT` | The tenant or user budget is exhausted. |
+| `PII_DETECTED` | Sensitive data (PII) pattern matched in arguments (and no redaction possible). |
+| `SSRF_BLOCKED` | Argument contained a URL or IP related to internal network segments. |
+| `ARGS_LIMIT_ENFORCED` | Argument size or value exceeded safe limits. |
+| `TENANT_SCOPE_VIOLATION` | Attempted to access resources not belonging to the tenant. |
+| `SCHEMA_MISMATCH` | Tool arguments do not match the strict schema in the Catalog. |
+| `DEFAULT_DENY` | No matching rule was found (Zero Trust). |
+
+### Success / Transform Codes
+| Code | Description |
+| :--- | :--- |
+| `ALLOWED_BY_RULE` | Explicitly allowed by a matching policy. |
+| `TRANSFORMED_BY_RULE` | Allowed, but arguments were modified (e.g., PII redacted). |
+| `DEFAULT_ALLOW` | (Dev Mode Only) Allowed by default policy. |

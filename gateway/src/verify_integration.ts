@@ -14,7 +14,8 @@ async function verifyFullFlow() {
     } catch (e) { }
 
     // 1. Check Receipt Count Before
-    const countBefore = db.raw.query('SELECT COUNT(*) as c FROM ledger_receipts')[0].c;
+    const rowsBefore = await db.raw.query('SELECT COUNT(*) as c FROM ledger_receipts');
+    const countBefore = rowsBefore[0].c;
     console.log(`[TEST] Receipts Before: ${countBefore}`);
 
     // 2. Perform Request (Using curl or internal simulation?)
@@ -54,15 +55,17 @@ async function verifyFullFlow() {
     await settlement(mockCtx);
 
     // 3. Check Receipt Count After
-    const countAfter = db.raw.query('SELECT COUNT(*) as c FROM ledger_receipts')[0].c;
+    const rowsAfter = await db.raw.query('SELECT COUNT(*) as c FROM ledger_receipts');
+    const countAfter = rowsAfter[0].c;
     console.log(`[TEST] Receipts After: ${countAfter}`);
 
     if (countAfter > countBefore) {
         console.log('✅ PASS: Receipt created by interceptor.');
 
         // 4. Verify Chain Link
-        const last = db.raw.query('SELECT * FROM ledger_receipts ORDER BY created_at DESC LIMIT 1')[0];
-        const chainHead = db.chain.getHead('tenant:tenant-integration-test');
+        const lastRows = await db.raw.query('SELECT * FROM ledger_receipts ORDER BY created_at DESC LIMIT 1');
+        const last = lastRows[0];
+        const chainHead = await db.chain.getHead('tenant:tenant-integration-test');
 
         if (chainHead && chainHead.last_receipt_id === last.receipt_id) {
             console.log('✅ PASS: Chain State updated to point to new receipt.');

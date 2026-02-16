@@ -13,7 +13,7 @@ export class RetentionManager {
         const cutoff = Date.now() - retentionPeriodMs;
 
         // 1. Logical Delete (Archive)
-        const entries = db.raw.query(`
+        const entries = await db.raw.query(`
             UPDATE ledger_receipts 
             SET status = 'archived' 
             WHERE created_at < ? AND legal_hold = 0 AND status = 'active'
@@ -25,8 +25,8 @@ export class RetentionManager {
     /**
      * Toggles legal hold on a specific request/receipt to prevent deletion.
      */
-    static setLegalHold(receiptId: string, hold: boolean) {
-        db.raw.run('UPDATE ledger_receipts SET legal_hold = ? WHERE receipt_id = ?', [hold ? 1 : 0, receiptId]);
+    static async setLegalHold(receiptId: string, hold: boolean) {
+        await db.raw.run('UPDATE ledger_receipts SET legal_hold = ? WHERE receipt_id = ?', [hold ? 1 : 0, receiptId]);
         console.log(`[RETENTION] Legal hold ${hold ? 'ENABLED' : 'DISABLED'} for ${receiptId}`);
     }
 
@@ -34,7 +34,7 @@ export class RetentionManager {
      * Forensic Export: Generates a signed bundle of all receipts for a tenant/period.
      */
     static async forensicExport(tenantId: string, start: number, end: number) {
-        const rows = db.raw.query(`
+        const rows = await db.raw.query(`
             SELECT * FROM ledger_receipts 
             WHERE tenant_id = ? AND created_at BETWEEN ? AND ?
         `, [tenantId, start, end]);

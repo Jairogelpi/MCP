@@ -86,17 +86,29 @@ export interface PolicyRule {
 
 export interface ABACRule {
     id: string;
-    name: string;
-    effect: RuleEffect;
-    priority: number;
+    priority: number; // Higher wins
+    effect: 'allow' | 'deny' | 'transform';
+    description?: string;
+
+    // Predicates (ALL must match if present)
     when: {
-        tool_name?: string | { pattern: string };
-        role?: string[];
-        risk_class?: 'low' | 'medium' | 'high';
-        time_restricted?: { start: string; end: string }; // HH:MM (24h)
-        [key: string]: any;
+        role?: string[]; // e.g. ["admin", "developer"]
+        tool_name?: string | { pattern: string }; // e.g. "transfer_*"
+        risk_class?: 'low' | 'medium' | 'high' | 'critical';
+        time_restricted?: { start: string; end: string }; // HH:MM
+
+        // Phase 2.3 Additions
+        project_id?: string[]; // e.g. ["proj_123"]
+        environment?: string[]; // e.g. ["prod"]
+        args_match?: Record<string, any>; // e.g. { "currency": "USD" } (Simple value match)
     };
-    transform?: PolicyTransform;
+
+    // Transformations
+    transform?: {
+        forceArgs?: Record<string, any>; // e.g. { "dry_run": true }
+        redactPII?: string[]; // e.g. ["email", "ssn"]
+        checkEgress?: boolean;
+    };
 }
 
 export interface PolicyRuleset {
@@ -108,18 +120,21 @@ export interface PolicyRuleset {
 
 export interface PolicyInput {
     tenant_id: string;
-    project_id?: string;
+    upstream_server_id: string; // Target
     agent_id: string;
-    role?: string; // Added for ABAC
-    session_id?: string;
-    upstream_server_id: string;
-    mcp_method?: string;
+    role: string; // Added for ABAC
     tool_name: string;
-    args: any;
-    input_schema_hash?: string;
-    risk_class?: string;
+    args: Record<string, any>; // Full arguments
     timestamp: number;
     request_id: string;
+    risk_class: 'low' | 'medium' | 'high' | 'critical';
+    // Phase 2.3 Additions (ABAC)
+    project_id?: string;
+    environment?: 'dev' | 'staging' | 'prod';
+    mcp_method?: string; // e.g. tools/call
+
+    // Legacy/Optional fields
+    session_id?: string;
 }
 
 export interface PolicyDecision {
@@ -194,5 +209,10 @@ export interface PipelineContext {
             message: string;
             status: number;
         }
+    };
+    resolvedUpstream?: {
+        url: string;
+        authType?: string;
+        authConfig?: any;
     };
 }

@@ -59,9 +59,8 @@ export class PDP {
             }
         }
 
-        // 2. Role (Agent Role MUST be in the allowed list)
+        // 2. Role (Agent Role match)
         if (when.role && when.role.length > 0) {
-            // input.role must be present and in the list
             if (!input.role || !when.role.includes(input.role)) return false;
         }
 
@@ -70,19 +69,35 @@ export class PDP {
             if (input.risk_class !== when.risk_class) return false;
         }
 
-        // 4. Time Restricted
+        // 4. Project ID (Phase 2.3)
+        if (when.project_id && when.project_id.length > 0) {
+            if (!input.project_id || !when.project_id.includes(input.project_id)) return false;
+        }
+
+        // 5. Environment (Phase 2.3)
+        if (when.environment && when.environment.length > 0) {
+            // If input env is missing, it's considered specific enough to NOT match a rule demanding an env.
+            // Or maybe default to 'prod'? Let's be strict.
+            if (!input.environment || !when.environment.includes(input.environment)) return false;
+        }
+
+        // 6. Time Restricted
         if (when.time_restricted) {
             const now = new Date(input.timestamp);
             const currentHHMM = now.toISOString().split('T')[1].substring(0, 5); // HH:MM
             const start = when.time_restricted.start;
             const end = when.time_restricted.end;
 
-            // Simple range check (assuming same day for MVP)
             if (currentHHMM < start || currentHHMM > end) {
-                // Outside allowed window? The rule says "Time Restricted" -> usually implies "When in this time".
-                // If the rule is an ALLOW rule, "when time is X" means it only allows during X.
-                // If it's a DENY rule, "when time is X" means it denies during X.
                 return false;
+            }
+        }
+
+        // 7. Args Match (Simple Key-Value Equality) (Phase 2.3)
+        if (when.args_match) {
+            for (const [key, allowedVal] of Object.entries(when.args_match)) {
+                const actualVal = input.args ? input.args[key] : undefined;
+                if (actualVal !== allowedVal) return false;
             }
         }
 

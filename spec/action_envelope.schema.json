@@ -1,8 +1,8 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
-    "$id": "https://mcp-financiero.internal/schemas/action-envelope.v0.1.0.json",
+    "$id": "https://agentshield.io/schemas/v0.1.0/action_envelope.json",
     "title": "ActionEnvelope",
-    "description": "The atomic unit of work for mcp_financiero interceptor pipeline.",
+    "description": "The atomic unit of work for the Financial MCP Gateway. All requests are normalized to this format.",
     "type": "object",
     "required": [
         "id",
@@ -15,13 +15,12 @@
     "properties": {
         "id": {
             "type": "string",
-            "format": "uuid",
-            "description": "Unique identifier for this action execution (Trace ID)."
+            "description": "Unique Request ID (UUID v4 preferred)."
         },
         "version": {
             "type": "string",
-            "pattern": "^\\d+\\.\\d+\\.\\d+$",
-            "description": "Schema version of this envelope (e.g. 0.1.0)"
+            "const": "v0.1.0",
+            "description": "Schema version."
         },
         "type": {
             "type": "string",
@@ -29,15 +28,16 @@
                 "command",
                 "query"
             ],
-            "description": "Nature of the request."
+            "description": "Nature of the action."
         },
         "action": {
             "type": "string",
-            "description": "Name of the tool/resource being accessed (e.g. 'get_balance', 'transfer')."
+            "description": "Name of the tool or function being called (e.g., 'get_balance')."
         },
         "parameters": {
             "type": "object",
-            "description": "Input arguments for the action."
+            "additionalProperties": true,
+            "description": "Arguments passed to the tool."
         },
         "meta": {
             "type": "object",
@@ -50,23 +50,27 @@
             "properties": {
                 "timestamp": {
                     "type": "integer",
-                    "description": "Unix timestamp (ms) of entry."
+                    "description": "Unix timestamp (ms) of request reception."
                 },
                 "source": {
                     "type": "string",
-                    "description": "Client identifier or origin IP."
+                    "enum": [
+                        "http",
+                        "sse"
+                    ],
+                    "description": "Protocol source."
                 },
                 "tenant": {
                     "type": "string",
-                    "description": "Tenant ID derived from route."
+                    "description": "Tenant ID identifying the organization."
                 },
                 "targetServer": {
                     "type": "string",
-                    "description": "Target MCP server derived from route."
+                    "description": "Name or ID of the upstream MCP server."
                 },
                 "authContext": {
                     "type": "object",
-                    "description": "Decoded authentication info (e.g. user_id, roles)."
+                    "description": "Identity information (user, role, scopes)."
                 }
             }
         }

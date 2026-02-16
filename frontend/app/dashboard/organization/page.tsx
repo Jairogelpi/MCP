@@ -32,6 +32,14 @@ interface ApiKey {
     environment?: string;
 }
 
+interface Upstream {
+    id: string;
+    name: string;
+    base_url: string;
+    auth_type: string;
+    created_at: number;
+}
+
 export default function OrganizationManagementPage() {
     const { user } = useAuth();
     const { currentOrg, fetchOrganizations } = useOrganization();
@@ -58,6 +66,13 @@ export default function OrganizationManagementPage() {
     const [orgName, setOrgName] = useState(currentOrg?.name || '');
     const [isUpdatingOrg, setIsUpdatingOrg] = useState(false);
 
+    // Upstream State
+    const [upstreams, setUpstreams] = useState<Upstream[]>([]);
+    const [newUpstreamName, setNewUpstreamName] = useState('');
+    const [newUpstreamUrl, setNewUpstreamUrl] = useState('');
+    const [isCreatingUpstream, setIsCreatingUpstream] = useState(false);
+    const [showUpstreamModal, setShowUpstreamModal] = useState(false);
+
     useEffect(() => {
         if (currentOrg) {
             setOrgName(currentOrg.name);
@@ -69,7 +84,7 @@ export default function OrganizationManagementPage() {
         if (!currentOrg || !user) return;
         setLoading(true);
         try {
-            const [membersRes, keysRes, depsRes] = await Promise.all([
+            const [membersRes, keysRes, depsRes, upsRes] = await Promise.all([
                 fetch(`http://localhost:3000/admin/org/members/${currentOrg.tenant_id}`, {
                     headers: { 'Authorization': `Bearer ${user.token}` }
                 }),
@@ -78,19 +93,24 @@ export default function OrganizationManagementPage() {
                 }),
                 fetch(`http://localhost:3000/admin/org/${currentOrg.tenant_id}/deployments`, {
                     headers: { 'Authorization': `Bearer ${user.token}` }
+                }),
+                fetch(`http://localhost:3000/admin/org/${currentOrg.tenant_id}/upstreams`, {
+                    headers: { 'Authorization': `Bearer ${user.token}` }
                 })
             ]);
 
             const membersData = await membersRes.json();
             const keysData = await keysRes.json();
             const depsData = await depsRes.json();
+            const upsData = await upsRes.json();
 
             setMembers(membersData.members || []);
             setApiKeys(keysData.keys || []);
             setDeployments(depsData.deployments || []);
+            setUpstreams(upsData.upstreams || []);
 
             // Set default deployment if available (prefer prod, then first)
-            if (depsData.deployments?.length > 0) {
+            if (depsData.deployments?.length > 0 && !selectedDeploymentId) {
                 const prod = depsData.deployments.find((d: any) => d.environment === 'prod');
                 setSelectedDeploymentId(prod ? prod.id : depsData.deployments[0].id);
             }
@@ -126,6 +146,48 @@ export default function OrganizationManagementPage() {
             console.error('Failed to create deployment', err);
         } finally {
             setIsCreatingDep(false);
+        }
+    };
+
+    const createUpstream = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!currentOrg || !user) return;
+        setIsCreatingUpstream(true);
+        try {
+            await fetch('http://localhost:3000/admin/upstreams', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user.token}`
+                },
+                body: JSON.stringify({
+                    tenantId: currentOrg.tenant_id,
+                    name: newUpstreamName,
+                    baseUrl: newUpstreamUrl,
+                    authType: 'none', // For Phase 10 MVP
+                })
+            });
+            setShowUpstreamModal(false);
+            setNewUpstreamName('');
+            setNewUpstreamUrl('');
+            fetchData();
+        } catch (err) {
+            console.error('Failed to create upstream', err);
+        } finally {
+            setIsCreatingUpstream(false);
+        }
+    };
+
+    const deleteUpstream = async (id: string) => {
+        if (!user || !confirm('¿Eliminar esta conexión upstream?')) return;
+        try {
+            await fetch(`http://localhost:3000/admin/upstreams/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${user.token}` }
+            });
+            fetchData();
+        } catch (err) {
+            console.error('Failed to delete upstream', err);
         }
     };
 
@@ -201,9 +263,6 @@ export default function OrganizationManagementPage() {
         ...dep,
         keys: apiKeys.filter(k => k.deployment_name === dep.name || (!k.deployment_name && dep.environment === 'prod')) // heuristic for legacy keys
     }));
-
-    // Handle legacy keys with no deployment
-    const legacyKeys = apiKeys.filter(k => !k.deployment_name);
 
     if (loading && members.length === 0) {
         return (
@@ -310,9 +369,58 @@ export default function OrganizationManagementPage() {
                                 <button
                                     type="submit"
                                     disabled={isCreatingDep}
-                                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl uppercase text-xs shadow-lg shadow-indigo-500/20"
+                                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-black py-3 rounded-xl uppercase text-xs shadow-lg shadow-indigo-500/20"
                                 >
                                     {isCreatingDep ? 'Creating...' : 'Launch Env'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* New Upstream Modal */}
+            {showUpstreamModal && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[90] flex items-center justify-center p-4">
+                    <div className="glass p-8 rounded-3xl w-full max-w-md space-y-6 border border-emerald-500/20 shadow-2xl shadow-emerald-500/10">
+                        <h3 className="text-xl font-black text-white italic uppercase tracking-tight">Connect Upstream</h3>
+                        <form onSubmit={createUpstream} className="space-y-4">
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">Server Name</label>
+                                <input
+                                    type="text"
+                                    value={newUpstreamName}
+                                    onChange={(e) => setNewUpstreamName(e.target.value)}
+                                    placeholder="e.g. Finance Core"
+                                    className="input-premium"
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">Base URL</label>
+                                <input
+                                    type="url"
+                                    value={newUpstreamUrl}
+                                    onChange={(e) => setNewUpstreamUrl(e.target.value)}
+                                    placeholder="http://localhost:3001"
+                                    className="input-premium font-mono text-xs"
+                                    required
+                                />
+                            </div>
+                            <div className="flex gap-4 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowUpstreamModal(false)}
+                                    className="flex-1 bg-white/5 hover:bg-white/10 text-gray-400 font-bold py-3 rounded-xl uppercase text-xs"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isCreatingUpstream}
+                                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3 rounded-xl uppercase text-xs shadow-lg shadow-emerald-500/20"
+                                >
+                                    {isCreatingUpstream ? 'Connecting...' : 'Link Server'}
                                 </button>
                             </div>
                         </form>
@@ -349,6 +457,45 @@ export default function OrganizationManagementPage() {
                                         <span className="text-[10px] font-mono text-gray-500 uppercase">{dep.environment}</span>
                                     </div>
                                     <p className="text-[10px] text-gray-600 font-mono">{dep.id}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Upstreams List */}
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-xl font-black text-white italic uppercase tracking-tight">Upstreams</h3>
+                            <button
+                                onClick={() => setShowUpstreamModal(true)}
+                                className="text-[10px] font-bold bg-emerald-500/10 text-emerald-400 hover:text-white px-3 py-1.5 rounded-lg border border-emerald-500/20 uppercase tracking-widest hover:bg-emerald-600 transition-all"
+                            >
+                                + Connect
+                            </button>
+                        </div>
+
+                        <div className="space-y-3">
+                            {upstreams.length === 0 && (
+                                <div className="p-4 rounded-2xl glass border border-dashed border-white/10 text-center">
+                                    <p className="text-[10px] text-gray-500 uppercase">No connections</p>
+                                </div>
+                            )}
+                            {upstreams.map(up => (
+                                <div key={up.id} className="p-4 rounded-2xl glass border border-white/5 hover:border-emerald-500/30 transition-all group relative">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                            <span className="font-bold text-sm text-white">{up.name}</span>
+                                        </div>
+                                        <span className="text-[10px] font-mono text-gray-500 uppercase">{up.auth_type}</span>
+                                    </div>
+                                    <p className="text-[10px] text-gray-600 font-mono truncate">{up.base_url}</p>
+                                    <button
+                                        onClick={() => deleteUpstream(up.id)}
+                                        className="absolute top-2 right-2 p-1.5 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/10 rounded-lg text-[10px]"
+                                    >
+                                        ✕
+                                    </button>
                                 </div>
                             ))}
                         </div>

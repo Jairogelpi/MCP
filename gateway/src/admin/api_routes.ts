@@ -554,4 +554,53 @@ export function registerAdminRoutes(server: FastifyInstance) {
 
         return { success: true };
     });
+
+    /**
+     * GET /admin/ledger/:tenantId/recent
+     * Returns recent ledger entries (receipts) for the Live Ledger visualization.
+     */
+    server.get('/admin/ledger/:tenantId/recent', { preHandler: [adminAuth] }, async (request, reply) => {
+        const { tenantId } = request.params as any;
+        const identity = (request as any).identity as Identity;
+
+        // Verify Tenancy: Only allow if admin is Global (can see all) OR it's their own tenant
+        if (!IdentityManager.isGlobalAdmin(identity) && identity.tenantId !== tenantId) {
+            return reply.status(403).send({ error: 'TENANT_ACCESS_DENIED' });
+        }
+
+        const limit = 50; // Hard limit for optimization
+
+        const receipts = await db.raw.query(`
+            SELECT 
+                receipt_id,
+                created_at,
+                receipt_json,
+                hash
+            FROM ledger_receipts
+            WHERE tenant_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+        `, [tenantId, limit]);
+
+        // Parse JSON for frontend convenience
+        const parsedReceipts = receipts.map((r: any) => {
+            try {
+                const data = JSON.parse(r.receipt_json);
+                return {
+                    id: r.receipt_id,
+                    timestamp: r.created_at,
+                    action: data.details?.action || data.result?.tool_name || 'unknown', // Fallback
+                    status: data.status || 'unknown',
+                    cost: data.cost || 0,
+                    error_code: data.error?.code,
+                    latency: data.details?.upstreamLatency,
+                    hash: r.hash
+                };
+            } catch (e) {
+                return { id: r.receipt_id, error: 'PARSE_ERROR' };
+            }
+        });
+
+        return { receipts: parsedReceipts };
+    });
 }

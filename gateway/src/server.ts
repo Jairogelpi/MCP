@@ -42,10 +42,7 @@ server.register(cors, {
 });
 
 // --- CONFIGURATION ---
-const UPSTREAMS = [
-    { id: 'finance-core', url: 'http://localhost:3001' },
-    { id: 'network-service', url: 'http://localhost:3002' }
-];
+// Upstreams are now dynamic via DB
 
 // --- ERROR HANDLER ---
 server.setErrorHandler((error, request, reply) => {
@@ -72,38 +69,47 @@ async function initializeCatalog() {
     console.log('[INIT] Initializing Tool Catalog...');
     const catalog = CatalogManager.getInstance();
 
-    for (const upstream of UPSTREAMS) {
-        try {
-            console.log(`[INIT] Fetching tools from upstream: ${upstream.id} (${upstream.url})...`);
-            const response = await fetch(`${upstream.url}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    jsonrpc: '2.0',
-                    method: 'tools/list',
-                    id: 1,
-                    params: {}
-                })
-            });
+    // Fetch all upstreams from DB
+    // Note: In production, we might want to do this lazily or per-tenant
+    try {
+        const { db } = require('./adapters/database');
+        const upstreams: any[] = await db.raw.query('SELECT * FROM upstreams');
 
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        for (const upstream of upstreams) {
+            try {
+                console.log(`[INIT] Fetching tools from upstream: ${upstream.name} (${upstream.base_url})...`);
+                const response = await fetch(`${upstream.base_url}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        method: 'tools/list',
+                        id: 1,
+                        params: {}
+                    })
+                });
 
-            const json = await response.json();
-            if (json.result && json.result.tools) {
-                for (const tool of json.result.tools) {
-                    catalog.upsertTool({
-                        name: tool.name,
-                        description: tool.description,
-                        inputSchema: tool.inputSchema,
-                        upstreamId: upstream.id
-                    });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const json = await response.json();
+                if (json.result && json.result.tools) {
+                    for (const tool of json.result.tools) {
+                        catalog.upsertTool({
+                            name: tool.name,
+                            description: tool.description,
+                            inputSchema: tool.inputSchema,
+                            upstreamId: upstream.name // Use name as ID for routing
+                        });
+                    }
+                    console.log(`[INIT] Loaded ${json.result.tools.length} tools from ${upstream.name}`);
                 }
-                console.log(`[INIT] Loaded ${json.result.tools.length} tools from ${upstream.id}`);
-            }
 
-        } catch (err) {
-            console.error(`[INIT] Failed to fetch tools from ${upstream.id}:`, err);
+            } catch (err: any) {
+                console.error(`[INIT] Failed to fetch tools from ${upstream.name}:`, err.message);
+            }
         }
+    } catch (err) {
+        console.error('[INIT] Failed to load upstreams from DB:', err);
     }
 
     // Virtual Tools for Testing
@@ -122,21 +128,61 @@ async function initializeCatalog() {
 
 // --- SERVER SETUP ---
 
-server.post('/mcp/:tenant/:server', async (request, reply) => {
+server.post('/mcp/:tenant/:upstream', async (request, reply) => {
     return tracer.startActiveSpan('edge.receive', async (span) => {
-        const { tenant, server } = request.params as { tenant: string; server: string };
+        const { tenant, upstream } = request.params as { tenant: string; upstream: string };
         const { logger } = require('./core/logger');
+        const { db } = require('./adapters/database');
 
         logger.info('request_received', {
             tenant_id: tenant,
-            upstream_server: server,
+            upstream_server: upstream,
             method: 'POST',
             url: request.url
         });
 
+        // Resolve Upstream URL from DB
+        const upstreams = await db.raw.query(
+            'SELECT * FROM upstreams WHERE tenant_id = ? AND name = ?',
+            [tenant, upstream]
+        );
+
+        if (!upstreams || upstreams.length === 0) {
+            // Fallback for Phase 1 demo/legacy
+            if (upstream === 'finance-core') {
+                if (process.env.NODE_ENV === 'development') {
+                    // Virtual fallback
+                } else {
+                    span.setStatus({ code: SpanStatusCode.ERROR, message: 'UPSTREAM_NOT_FOUND' });
+                    return reply.status(404).send({ error: { code: 'UPSTREAM_NOT_FOUND', message: `Upstream ${upstream} not configured for tenant ${tenant}` } });
+                }
+            } else {
+                span.setStatus({ code: SpanStatusCode.ERROR, message: 'UPSTREAM_NOT_FOUND' });
+                return reply.status(404).send({ error: { code: 'UPSTREAM_NOT_FOUND', message: `Upstream ${upstream} not configured for tenant ${tenant}` } });
+            }
+        }
+
+        // If found, construct the URL.
+        // NOTE: The previous logic assumed the URL in UPSTREAMS array.
+        // Now we use the base_url from DB.
+        // We need to pass this config to the 'forward' interceptor.
+        // Or better: The 'forward' interceptor previously took the 'upstreamId' and looked it up?
+        // Let's check 'forward.ts'.
+        // Wait, forward.ts receives 'context'.
+        // We should inject the resolved URL into the context or just update the mechanism.
+
+        // Actually, looking at server.ts lines 45-48, UPSTREAMS was just an array.
+        // The routing logic (lines 125+) didn't seem to explicitly use UPSTREAMS to *route* inside the pipeline runner?
+        // Let's look at `interceptors/05_forward.ts`.
+        // If forward.ts does the fetching, IT needs to know the URL.
+        // Use `request.params.server` as the key?
+        // It's better if we resolve it HERE and pass it in context.
+
+        const upstreamConfig = upstreams && upstreams.length > 0 ? upstreams[0] : { base_url: 'http://localhost:3001' }; // Fallback for dev
+
         // Add Attributes
         span.setAttribute('tenant_id', tenant);
-        span.setAttribute('upstream_server', server);
+        span.setAttribute('upstream_server', serverName);
         span.setAttribute('http.method', 'POST');
         span.setAttribute('http.url', request.url);
 
@@ -144,8 +190,14 @@ server.post('/mcp/:tenant/:server', async (request, reply) => {
         const context: PipelineContext = {
             request,
             reply,
-            stepResults: {}
-        };
+            stepResults: {},
+            // Inject resolved upstream config for the forwarder
+            resolvedUpstream: {
+                url: upstreamConfig.base_url,
+                authType: upstreamConfig.auth_type,
+                authConfig: upstreamConfig.auth_config ? JSON.parse(upstreamConfig.auth_config) : undefined
+            }
+        } as any; // Cast to allow extra property
 
         const runner = new PipelineRunner();
 
@@ -181,7 +233,7 @@ server.post('/mcp/:tenant/:server', async (request, reply) => {
 
             logger.error('request_failed', {
                 tenant_id: tenant,
-                upstream_server: server,
+                upstream_server: upstream,
                 tool_name: toolName,
                 error_code: err.message,
                 outcome: 'FAILURE'
@@ -223,10 +275,10 @@ server.post('/mcp/:tenant/:server', async (request, reply) => {
             throw new Error(context.stepResults.error.code);
         }
 
-        const upstream = context.stepResults.upstream;
-        if (upstream?.isStream && upstream.stream) {
+        const upstreamResponse = context.stepResults.upstream;
+        if (upstreamResponse?.isStream && upstreamResponse.stream) {
             console.log('[SERVER] Sending Stream Response');
-            return reply.send(upstream.stream);
+            return reply.send(upstreamResponse.stream);
         }
 
         const receipt = context.stepResults.receipt;

@@ -20,7 +20,7 @@ export class BillingManager {
         console.log(`[BILLING] Closing period ${yearMonth} for ${tenantId}...`);
 
         // 1. Sum all settled transactions in period
-        const result = db.raw.query(`
+        const result = await db.raw.query(`
             SELECT SUM(amount_settled) as total, currency 
             FROM ledger_transactions 
             WHERE tenant_id = ? AND strftime('%Y-%m', created_at / 1000, 'unixepoch') = ?
@@ -51,7 +51,7 @@ export class BillingManager {
      * Forensic Check: Ensure no transactions exist for a closed period.
      */
     static async verifySeal(tenantId: string, yearMonth: string): Promise<boolean> {
-        const closure = db.raw.prepare('SELECT * FROM billing_closures WHERE tenant_id = ? AND period_id = ?').get([tenantId, yearMonth]);
-        return !!closure;
+        const rows = await db.raw.query('SELECT * FROM billing_closures WHERE tenant_id = ? AND period_id = ?', [tenantId, yearMonth]);
+        return rows.length > 0;
     }
 }

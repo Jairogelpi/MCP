@@ -1,56 +1,68 @@
-# Proxy API Specification (v0.1.0)
+# Proxy API Contract (v0.1.0)
 
-## Rutas
+## Overview
+The Gateway listens on `0.0.0.0:3000` and exposes a unified entry point for all MCP tool invocations.
 
-El proxy expone una estructura de rutas jerárquica para soportar multi-tenancy y múltiples servidores upstream.
+## Route
 
-### POST `/mcp/:tenant/:server`
+### `POST /mcp/:tenant/:upstream`
 
-Ejecuta una acción (Tool o Prompt) contra un servidor MCP específico.
+Invokes a specific tool on a specific upstream server context.
 
 - **URL Params**:
-  - `:tenant`: Identificador del cliente/organización (ej. `acme-corp`).
-  - `:server`: Identificador del servidor MCP upstream (ej. `financial-core`).
+  - `tenant`: The Organization ID (e.g., `demo-client`).
+  - `upstream`: The logical name of the upstream server (e.g., `finance-core`).
 
 - **Headers**:
-  - `Authorization`: `Bearer <token>` (Requerido)
+  - `Authorization`: `Bearer <jwt_token>` OR `x-api-key: <api_key>`
   - `Content-Type`: `application/json`
 
-- **Body**:
+- **Body (JSON-RPC 2.0 style)**:
   ```json
   {
-    "type": "command", // o "query"
-    "action": "get_balance",
-    "parameters": { "accountId": "123" }
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "name": "transfer_funds",
+      "arguments": {
+        "from": "A1",
+        "to": "B2",
+        "amount": 100
+      }
+    },
+    "id": "123"
   }
   ```
 
-## Autenticación
+## Authentication
+The gateway accepts two forms of authentication, normalized into `PipelineContext.identity`:
 
-Para el MVP, se utilizará un esquema simple de API Key o JWT simulado.
-El header `Authorization` es obligatorio.
+1.  **API Key**:
+    -   Header: `x-api-key`
+    -   Validated against `iam_keys` table.
+2.  **JWT (User Session)**:
+    -   Header: `Authorization: Bearer <token>`
+    -   Validated via `AuthService`.
 
-## Respuestas y Errores
+## Response Format
 
-El proxy intercepta errores del pipeline y devuelve códigos de estado HTTP y códigos de error internos estandarizados.
-
-| Escenario | HTTP Status | Error Code (Internal) | Descripción |
-|---|---|---|---|
-| Éxito | 200 OK | - | La acción se ejecutó y retornó resultado. |
-| Auth Fallida | 401 Unauthorized | `AUTH_MISSING` / `AUTH_INVALID` | No se envió token o es inválido. |
-| Bloqueo por Política | 403 Forbidden | `POLICY_DENY` | El interceptor de políticas rechazó la acción. |
-| Presupuesto Excedido | 402 Payment Required | `BUDGET_EXCEEDED` | El interceptor económico no pudo reservar fondos. |
-| Validación Fallida | 400 Bad Request | `INVALID_FORMAT` | El payload no cumple con el schema. |
-| Error Upstream | 502 Bad Gateway | `UPSTREAM_ERROR` | El servidor MCP upstream falló. |
-
-### Formato de Error
+### Success (200 OK)
+Standard JSON-RPC 2.0 result, potentially decorated with receipt data.
 
 ```json
 {
-  "error": {
-    "code": "POLICY_DENY",
-    "message": "Action 'transfer' is not allowed for this user role.",
-    "requestId": "uuid..."
+  "jsonrpc": "2.0",
+  "id": "123",
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "Transfer successful."
+      }
+    ]
   }
 }
 ```
+
+### Error (4xx/5xx)
+See [error_codes.md](./error_codes.md) for standardized error objects.

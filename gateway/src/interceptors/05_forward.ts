@@ -41,7 +41,13 @@ export const forward: Interceptor = async (ctx) => {
             if (!envelope) return;
 
             const targetServer = envelope.meta.targetServer;
-            const upstreamUrl = UPSTREAM_MAP[targetServer];
+
+            // Resolve URL: Prefer context injection (DB), fallback to map (Legacy/Dev)
+            let upstreamUrl = ctx.resolvedUpstream?.url || UPSTREAM_MAP[targetServer];
+
+            // If we have an upstream config but no URL (shouldn't happen if properly typed), fallback
+            if (!upstreamUrl && ctx.resolvedUpstream) upstreamUrl = ctx.resolvedUpstream.url;
+
             const breaker = getBreaker(targetServer);
 
             span.setAttribute('upstream.id', targetServer);
@@ -97,9 +103,19 @@ export const forward: Interceptor = async (ctx) => {
                             params: { name: envelope.action, arguments: envelope.parameters }
                         };
 
+                        // Prepare Headers
+                        const headers: any = { 'Content-Type': 'application/json' };
+
+                        // Inject Upstream Auth
+                        if (ctx.resolvedUpstream?.authType === 'bearer' && ctx.resolvedUpstream.authConfig?.token) {
+                            headers['Authorization'] = `Bearer ${ctx.resolvedUpstream.authConfig.token}`;
+                        } else if (ctx.resolvedUpstream?.authType === 'header' && ctx.resolvedUpstream.authConfig?.headerName) {
+                            headers[ctx.resolvedUpstream.authConfig.headerName] = ctx.resolvedUpstream.authConfig.value;
+                        }
+
                         const response = await fetch(upstreamUrl, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: headers,
                             body: JSON.stringify(rpcRequest),
                             signal: AbortSignal.timeout(30000) // 30s timeout
                         });

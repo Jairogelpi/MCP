@@ -1,8 +1,10 @@
 # Security
-private.pem
-public.pem
+*.pem
+*.key
 keys.json
+new_keys.json
 keys_old.json
+credentials.json
 
 # Environment
 .env

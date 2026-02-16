@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useOrganization } from '../context/OrganizationContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { LiveLedger } from '../components/LiveLedger';
 
 interface SystemStatus {
     status: string;
@@ -267,6 +268,14 @@ export default function DashboardPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Live Ledger Component (Phase 0 Visibility) */}
+            {currentOrg && (
+                <div className="space-y-6">
+                    <h2 className="text-2xl font-black text-white italic tracking-tighter uppercase underline decoration-emerald-500/40 decoration-4 underline-offset-8">Core Contract Activity</h2>
+                    <LiveLedger tenantId={currentOrg.tenant_id} />
+                </div>
+            )}
 
             {/* Grid 2: Tenant & Financial Control (Phase 1) */}
             <div className="space-y-6">

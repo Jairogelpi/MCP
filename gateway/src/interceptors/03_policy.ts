@@ -8,37 +8,11 @@ import { LimitsTransformer } from '../core/transformers/limits';
 import * as fs from 'fs';
 import * as path from 'path';
 
-// --- CONFIGURATION ---
-// MVP: Load ruleset based on tenant context or default to acme.
-// In a real system, this would be a RulesetManager caching multiple tenants.
-let rulesets: Record<string, any> = {};
-
-function loadRuleset(tenant: string) {
-    if (rulesets[tenant]) return rulesets[tenant];
-
-    const rulePath = path.join(__dirname, `../../policies/tenant/${tenant}/ruleset_v1.json`);
-    try {
-        if (fs.existsSync(rulePath)) {
-            const ruleset = JSON.parse(fs.readFileSync(rulePath, 'utf8'));
-            console.log(`[PEP] Loaded ruleset version ${ruleset.version} for ${tenant}`);
-            rulesets[tenant] = ruleset;
-            return ruleset;
-        }
-    } catch (e) {
-        console.error(`[PEP] Failed to load ruleset for ${tenant}:`, e);
-    }
-
-    // Fallback to ACME if not found (for testing/demo consistency if tenant folder missing)
-    // Or return empty denial ruleset
-    return { tenant_id: 'unknown', version: '0.0.0', rules: [] };
-}
-
-// Pre-load ACME and Demo
-loadRuleset('acme');
-loadRuleset('demo-client');
+import { RulesetManager } from '../core/ruleset_manager';
 
 const pdp = new PDP();
 const catalog = CatalogManager.getInstance();
+const rulesetManager = RulesetManager.getInstance();
 
 import { trace, metrics, SpanStatusCode } from '@opentelemetry/api';
 
@@ -63,8 +37,26 @@ export const policy: Interceptor = async (ctx) => {
             span.setAttribute('tenant_id', tenant);
 
             // 1. Enrichment (Catalog)
-            const toolDef = catalog.getTool(targetServer, toolName);
-            const riskClass = toolDef?.riskClass || 'medium';
+            const toolDef = await catalog.getTool(targetServer, toolName);
+
+            // STRICT ENFORCEMENT (Phase 2)
+            if (!toolDef) {
+                const { logger } = require('../core/logger');
+                logger.warn('policy_unknown_tool', { tenant_id: tenant, tool_name: toolName });
+
+                // If we are in strict mode (Phase 2), we deny.
+                // For transition, we might want to allow common tools or default to 'high' risk.
+                // But user requested "Real Tool Catalog", so we deny if not found.
+
+                ctx.stepResults.error = {
+                    code: PolicyReasonCodes.FORBIDDEN_TOOL,
+                    message: `Tool '${toolName}' not found in catalog for upstream '${targetServer}'`,
+                    status: 403
+                };
+                throw new Error(PolicyReasonCodes.FORBIDDEN_TOOL);
+            }
+
+            const riskClass = toolDef.riskClass || 'medium';
 
             // 2. Enrichment (Identity)
             const identity = ctx.identity || { role: 'viewer', userId: 'anonymous', tenantId: 'unknown', scopes: [] };
@@ -80,13 +72,25 @@ export const policy: Interceptor = async (ctx) => {
                 args: envelope.parameters,
                 timestamp: Date.now(),
                 request_id: envelope.id,
-                risk_class: riskClass // Enriched
+                risk_class: riskClass,
+                // ABAC: Extract from envelope.meta or default
+                project_id: (envelope.meta as any).project_id,
+                environment: (envelope.meta as any).environment || 'prod', // Default strict
+                mcp_method: 'tools/call' // Standard for now
             };
 
             console.log(`[PEP] Evaluating for ${agentId} (Role: ${role}) -> ${toolName} (Risk: ${riskClass})`);
 
             // 3. Evaluate
-            const activeRuleset = loadRuleset(tenant);
+            // Fetch Ruleset from DB (Phase 2.3)
+            const activeRuleset = await rulesetManager.getActiveRuleset(tenant);
+
+            // Log active version
+            span.setAttribute('policy.ruleset_version', activeRuleset.version);
+            if (activeRuleset.version.includes('fallback')) {
+                console.warn(`[PEP] Using fallback/empty ruleset for ${tenant}`);
+            }
+
             const decision = pdp.evaluate(input, activeRuleset);
 
             span.setAttribute('policy.decision', decision.decision.toUpperCase());
