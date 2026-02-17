@@ -57,13 +57,25 @@ export const receiptInteractor: Interceptor = async (ctx) => {
 
             } else {
                 const errorDetails = ctx.stepResults.error;
+                const envelope = ctx.stepResults.normalized;
+                const policyDecision = ctx.stepResults.policy;
+
+                // Calculate Envelope Hash
+                let envelopeHash = '';
+                if (envelope) {
+                    const crypto = require('crypto');
+                    envelopeHash = crypto.createHash('sha256').update(JSON.stringify(envelope)).digest('hex');
+                }
+
                 const receipt: Receipt = {
                     transactionId: ctx.request.id,
                     status: errorDetails ? 'failure' : 'success',
                     error: errorDetails ? { code: errorDetails.code, message: errorDetails.message } : undefined,
                     details: { ...upstreamInfo, economic: costDetails },
                     cost: costDetails.cost,
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
+                    envelope_hash: envelopeHash,
+                    policy_version: policyDecision?.matchedRuleId || 'baseline'
                 };
                 ctx.stepResults.receipt = receipt;
 

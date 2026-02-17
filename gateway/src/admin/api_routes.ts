@@ -1,6 +1,9 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { db } from '../adapters/database';
 import { IdentityManager, Identity } from '../core/auth/identity_manager';
+import { BootstrapService } from '../core/auth/bootstrap_service';
+import { PolicyCompiler } from '../core/policy_compiler';
+import { AgentPolicyConfig } from '../core/contract';
 import * as crypto from 'crypto';
 
 export function registerAdminRoutes(server: FastifyInstance) {
@@ -48,11 +51,32 @@ export function registerAdminRoutes(server: FastifyInstance) {
         console.log(`[adminAuth] Access granted for user: ${identity.userId} (Role: ${identity.role}, Tenant: ${identity.tenantId})`);
     };
     /**
+     * POST /admin/bootstrap
+     * Idempotently setup organization, default upstream and initial API key.
+     */
+    server.post('/admin/bootstrap', { preHandler: [adminAuth] }, async (request, reply) => {
+        const identity = (request as any).identity as Identity;
+
+        const userRows = await db.raw.query('SELECT name, email FROM iam_users WHERE user_id = ?', [identity.userId]);
+        const user = userRows[0];
+
+        if (!user) return reply.status(404).send({ error: 'USER_NOT_FOUND' });
+
+        const result = await BootstrapService.bootstrap(identity.userId, user.name, user.email);
+
+        return {
+            success: true,
+            tenant_id: result.tenantId,
+            api_key: result.rawKey || 'sk_exists'
+        };
+    });
+
+    /**
      * POST /admin/api-keys
      * Creates a new hashed API key.
      */
     server.post('/admin/api-keys', { preHandler: [adminAuth] }, async (request, reply) => {
-        const { tenantId, deploymentId } = request.body as any;
+        const { tenantId, deploymentId, agentId } = request.body as any;
         const identity = (request as any).identity as Identity;
 
         if (!tenantId) return reply.status(400).send({ error: 'Missing tenantId' });
@@ -65,9 +89,9 @@ export function registerAdminRoutes(server: FastifyInstance) {
         const expiry = now + (365 * 24 * 60 * 60 * 1000); // 1 year default
 
         await db.raw.run(`
-            INSERT INTO iam_keys (key_id, key_hash, user_id, tenant_id, deployment_id, scopes, status, expires_at, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [newKeyId, keyHash, identity.userId, tenantId, deploymentId || null, '*', 'active', expiry, now]);
+            INSERT INTO iam_keys (key_id, key_hash, user_id, tenant_id, deployment_id, agent_id, scopes, status, expires_at, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [newKeyId, keyHash, identity.userId, tenantId, deploymentId || null, agentId || null, '*', 'active', expiry, now]);
 
         // Return the SECRET only once
         return {
@@ -119,9 +143,11 @@ export function registerAdminRoutes(server: FastifyInstance) {
     server.get('/admin/api-keys/:tenantId', { preHandler: [adminAuth] }, async (request, reply) => {
         const { tenantId } = request.params as any;
         const keys = await db.raw.query(`
-            SELECT k.key_id, k.user_id, k.tenant_id, k.scopes, k.status, k.expires_at, k.created_at, d.name as deployment_name, d.environment
+            SELECT k.key_id, k.user_id, k.tenant_id, k.scopes, k.status, k.expires_at, k.created_at, 
+                   d.name as deployment_name, d.environment, a.name as agent_name
             FROM iam_keys k
             LEFT JOIN deployments d ON k.deployment_id = d.id
+            LEFT JOIN iam_agents a ON k.agent_id = a.id
             WHERE k.tenant_id = ? AND k.status != 'revoked'
             ORDER BY k.created_at DESC
         `, [tenantId]);
@@ -349,6 +375,40 @@ export function registerAdminRoutes(server: FastifyInstance) {
     });
 
     /**
+     * POST /admin/upstreams/test
+     * Verifies if an upstream URL is reachable.
+     */
+    server.post('/admin/upstreams/test', { preHandler: [adminAuth] }, async (request, reply) => {
+        const { baseUrl, authType, authConfig } = request.body as any;
+        if (!baseUrl) return reply.status(400).send({ error: 'Missing baseUrl' });
+
+        try {
+            const headers: any = { 'Content-Type': 'application/json' };
+            if (authType === 'bearer' && authConfig?.token) {
+                headers['Authorization'] = `Bearer ${authConfig.token}`;
+            }
+
+            const startTime = Date.now();
+            const response = await fetch(baseUrl, {
+                method: 'GET', // Or OPTIONS if supported, but GET / is safer for general availability
+                headers,
+                signal: AbortSignal.timeout(5000) // 5s timeout for test
+            });
+
+            return {
+                success: response.ok,
+                status: response.status,
+                latency: Date.now() - startTime
+            };
+        } catch (err: any) {
+            return {
+                success: false,
+                error: err.message
+            };
+        }
+    });
+
+    /**
      * GET /admin/org/:id/departments
      */
     server.get('/admin/org/:id/departments', { preHandler: [adminAuth] }, async (request, reply) => {
@@ -392,6 +452,58 @@ export function registerAdminRoutes(server: FastifyInstance) {
         });
 
         return { success: true, dept_id: deptId };
+    });
+
+    /**
+     * GET /admin/org/:tenantId/agents
+     * Lists all agents for a tenant.
+     */
+    server.get('/admin/org/:tenantId/agents', { preHandler: [adminAuth] }, async (request, reply) => {
+        const { tenantId } = request.params as any;
+        const agents = await db.raw.query(`
+            SELECT a.*, g.config_json as governance
+            FROM iam_agents a
+            LEFT JOIN agent_governance g ON a.id = g.agent_id
+            WHERE a.tenant_id = ? 
+            ORDER BY a.created_at DESC
+        `, [tenantId]);
+
+        // Parse governance JSON for simplicity in frontend
+        const parsedAgents = agents.map((ag: any) => ({
+            ...ag,
+            governance: ag.governance ? JSON.parse(ag.governance) : null
+        }));
+
+        return { agents: parsedAgents };
+    });
+
+    /**
+     * POST /admin/agents
+     * Creates a new agent.
+     */
+    server.post('/admin/agents', { preHandler: [adminAuth] }, async (request, reply) => {
+        const { tenantId, name, roleId, description } = request.body as any;
+        if (!tenantId || !name) return reply.status(400).send({ error: 'Missing tenantId or name' });
+
+        const id = `ag_${crypto.randomBytes(4).toString('hex')}`;
+        const now = Date.now();
+
+        await db.raw.run(`
+            INSERT INTO iam_agents (id, tenant_id, name, role_id, description, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [id, tenantId, name, roleId || 'role_operator', description || null, now, now]);
+
+        return { id, name, roleId: roleId || 'role_operator' };
+    });
+
+    /**
+     * DELETE /admin/agents/:id
+     */
+    server.delete('/admin/agents/:id', { preHandler: [adminAuth] }, async (request, reply) => {
+        const { id } = request.params as any;
+        // Check if agent has keys, if so, they should be revoked first or we could revoke them here
+        await db.raw.run('DELETE FROM iam_agents WHERE id = ?', [id]);
+        return { success: true };
     });
 
     /**
@@ -575,7 +687,9 @@ export function registerAdminRoutes(server: FastifyInstance) {
                 receipt_id,
                 created_at,
                 receipt_json,
-                hash
+                hash,
+                envelope_hash,
+                policy_version
             FROM ledger_receipts
             WHERE tenant_id = ?
             ORDER BY created_at DESC
@@ -594,7 +708,9 @@ export function registerAdminRoutes(server: FastifyInstance) {
                     cost: data.cost || 0,
                     error_code: data.error?.code,
                     latency: data.details?.upstreamLatency,
-                    hash: r.hash
+                    hash: r.hash,
+                    envelope_hash: r.envelope_hash,
+                    policy_version: r.policy_version
                 };
             } catch (e) {
                 return { id: r.receipt_id, error: 'PARSE_ERROR' };
@@ -602,5 +718,106 @@ export function registerAdminRoutes(server: FastifyInstance) {
         });
 
         return { receipts: parsedReceipts };
+    });
+
+    /**
+     * GET /admin/org/:tenantId/approvals
+     * Lists all pending approval requests for a tenant.
+     */
+    /**
+     * GET /admin/agents/:id/governance
+     * Returns the simplified governance config for a specific agent.
+     */
+    server.get('/admin/agents/:id/governance', { preHandler: [adminAuth] }, async (request, reply) => {
+        const { id } = request.params as any;
+        const identity = (request as any).identity as Identity;
+
+        const config = await db.raw.query('SELECT config_json FROM agent_governance WHERE agent_id = ?', [id]);
+
+        if (config[0]) {
+            return JSON.parse(config[0].config_json);
+        }
+
+        // Default empty config if none exists
+        return {
+            agent_id: id,
+            mode: 'open',
+            allowed_upstreams: [],
+            allowed_actions: [],
+            allowed_models: []
+        };
+    });
+
+    /**
+     * POST /admin/agents/:id/governance
+     * Persists the intent and compiles into formal UnifiedPolicies.
+     */
+    server.post('/admin/agents/:id/governance', { preHandler: [adminAuth] }, async (request, reply) => {
+        const { id } = request.params as any;
+        const config = request.body as AgentPolicyConfig;
+        const identity = (request as any).identity as Identity;
+        const now = Date.now();
+
+        // 1. Persist the "Intent"
+        await db.raw.run(`
+            INSERT INTO agent_governance (agent_id, tenant_id, config_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(agent_id) DO UPDATE SET 
+                config_json = excluded.config_json,
+                updated_at = excluded.updated_at
+        `, [id, identity.tenantId, JSON.stringify(config), now, now]);
+
+        // 2. Compile into low-level policies
+        const policies = PolicyCompiler.compile(config, identity.tenantId);
+
+        // 3. Clear existing auto-generated policies for this agent to avoid conflicts
+        // We identify them by the '3.0.0-auto' version or a specific prefix
+        await db.raw.run(`
+            DELETE FROM iam_policies 
+            WHERE tenant_id = ? 
+            AND scope_type = 'agent' 
+            AND scope_id = ? 
+            AND version = '3.0.0-auto'
+        `, [identity.tenantId, id]);
+
+        // 4. Persist compiled policies
+        for (const pol of policies) {
+            await db.raw.run(`
+                INSERT INTO iam_policies (id, tenant_id, deployment_id, scope_type, scope_id, priority, mode, effect, conditions, constraints, version, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+                pol.id, pol.tenant_id, pol.deployment_id, pol.scope_type, pol.scope_id,
+                pol.priority, pol.mode, pol.effect, JSON.stringify(pol.conditions),
+                JSON.stringify(pol.constraints), pol.version, now, now
+            ]);
+        }
+
+        return { success: true, policy_count: policies.length };
+    });
+
+    server.get('/admin/org/:tenantId/approvals', { preHandler: [adminAuth] }, async (request, reply) => {
+        const { tenantId } = request.params as any;
+        const { ApprovalService } = require('../core/approval_service');
+        const approvals = await ApprovalService.listPending(tenantId);
+        return { approvals };
+    });
+
+    /**
+     * POST /admin/approvals/:id/resolve
+     * Resolves an approval request (approve/reject).
+     */
+    server.post('/admin/approvals/:id/resolve', { preHandler: [adminAuth] }, async (request, reply) => {
+        const { id } = request.params as any;
+        const { status } = request.body as any;
+        const identity = (request as any).identity as Identity;
+
+        if (!['approved', 'rejected'].includes(status)) {
+            return reply.status(400).send({ error: 'Invalid status' });
+        }
+
+        const { ApprovalService } = require('../core/approval_service');
+        await ApprovalService.resolve(id, status, identity.userId);
+
+        return { success: true };
     });
 }

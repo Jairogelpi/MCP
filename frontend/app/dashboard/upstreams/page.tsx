@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useOrganization } from '../../context/OrganizationContext';
 import { UpstreamsTable } from '../../../components/UpstreamsTable';
 import Link from 'next/link';
+import { GATEWAY_URL } from '../../../lib/config';
 
 export default function UpstreamsPage() {
     const { user } = useAuth();
@@ -16,7 +17,7 @@ export default function UpstreamsPage() {
         if (!user || !currentOrg) return;
         setLoading(true);
         try {
-            const res = await fetch(`http://localhost:3000/admin/org/${currentOrg.tenant_id}/upstreams`, {
+            const res = await fetch(`${GATEWAY_URL}/admin/org/${currentOrg.tenant_id}/upstreams`, {
                 headers: { 'Authorization': `Bearer ${user.token}` }
             });
             const data = await res.json();

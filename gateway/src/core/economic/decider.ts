@@ -25,6 +25,7 @@ export interface EconomicInput {
         model?: string;
         tier?: string;
     };
+    cost_overrides?: Record<string, number>;
 }
 
 export interface EconomicDecision {
@@ -58,11 +59,23 @@ export class EconomicDecider {
         }
 
         // 2. Estimate
-        const estimate = this.estimator.estimate({
-            ...context,
-            endpoint: input.tool_name,
-            estimated_tokens_out
-        }, input.args);
+        let estimate;
+        if (input.cost_overrides && input.cost_overrides[input.tool_name] !== undefined) {
+            const overrideCost = input.cost_overrides[input.tool_name];
+            console.log(`[ECON] Applying cost override for ${input.tool_name}: ${overrideCost}`);
+            estimate = {
+                estimated_cost: overrideCost,
+                currency: 'USD', // Default for now
+                estimated_tokens_in: 0,
+                estimated_tokens_out: 0
+            };
+        } else {
+            estimate = this.estimator.estimate({
+                ...context,
+                endpoint: input.tool_name,
+                estimated_tokens_out
+            }, input.args);
+        }
 
         // Fail-safe Check
         if (estimate.estimated_cost === -1) {

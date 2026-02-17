@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
+import { GATEWAY_URL } from '../../lib/config';
 
 interface Organization {
     tenant_id: string;
@@ -30,7 +31,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
     const fetchOrganizations = async () => {
         if (!user) return;
         try {
-            const res = await fetch('http://localhost:3000/admin/tenants', {
+            const res = await fetch(`${GATEWAY_URL}/admin/tenants`, {
                 headers: { 'Authorization': `Bearer ${user.token}` }
             });
             const data = await res.json();
@@ -49,7 +50,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
     const createOrganization = async (name: string, initialBudget: number) => {
         if (!user) return;
         try {
-            const res = await fetch('http://localhost:3000/admin/org/create', {
+            const res = await fetch(`${GATEWAY_URL}/admin/org/create`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

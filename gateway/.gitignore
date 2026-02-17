@@ -1,14 +1,25 @@
 # Security
 *.pem
-*.key
 keys.json
 new_keys.json
 keys_old.json
 credentials.json
 
-# Environment
+# Production & Secrets
+*.pem
+*.key
+*.sqlite
+*.sqlite-journal
 .env
-.env.local
+.env.*
+ 
+# Logs & Temps
+*.log
+build_error*.txt
+temp_*.ts
+test_*.json
+exports/
+backups/
 
 # Builds
 dist/

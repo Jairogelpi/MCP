@@ -9,10 +9,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { RulesetManager } from '../core/ruleset_manager';
+import { PolicyEngine } from '../core/policy_engine';
 
-const pdp = new PDP();
+const engine = new PolicyEngine();
 const catalog = CatalogManager.getInstance();
-const rulesetManager = RulesetManager.getInstance();
 
 import { trace, metrics, SpanStatusCode } from '@opentelemetry/api';
 
@@ -59,9 +59,10 @@ export const policy: Interceptor = async (ctx) => {
             const riskClass = toolDef.riskClass || 'medium';
 
             // 2. Enrichment (Identity)
-            const identity = ctx.identity || { role: 'viewer', userId: 'anonymous', tenantId: 'unknown', scopes: [] };
-            const agentId = identity.userId;
+            const identity = ctx.identity || { role: 'viewer', userId: 'anonymous', tenantId: 'unknown', scopes: [], environment: 'prod' };
+            const agentId = identity.agentId || identity.userId;
             const role = identity.role;
+            const environment = identity.environment || 'prod';
 
             const input: PolicyInput = {
                 tenant_id: tenant,
@@ -73,25 +74,21 @@ export const policy: Interceptor = async (ctx) => {
                 timestamp: Date.now(),
                 request_id: envelope.id,
                 risk_class: riskClass,
-                // ABAC: Extract from envelope.meta or default
+                // ABAC: Extract from enriched identity
                 project_id: (envelope.meta as any).project_id,
-                environment: (envelope.meta as any).environment || 'prod', // Default strict
-                mcp_method: 'tools/call' // Standard for now
+                environment: environment,
+                mcp_method: 'tools/call', // Standard for now
+                resource: envelope.parameters?.model || envelope.parameters?.resource || undefined
             };
 
             console.log(`[PEP] Evaluating for ${agentId} (Role: ${role}) -> ${toolName} (Risk: ${riskClass})`);
 
+            // Generate Envelope Hash for potential approval/audit
+            const crypto = require('crypto');
+            const envelopeHash = crypto.createHash('sha256').update(JSON.stringify(envelope)).digest('hex');
+
             // 3. Evaluate
-            // Fetch Ruleset from DB (Phase 2.3)
-            const activeRuleset = await rulesetManager.getActiveRuleset(tenant);
-
-            // Log active version
-            span.setAttribute('policy.ruleset_version', activeRuleset.version);
-            if (activeRuleset.version.includes('fallback')) {
-                console.warn(`[PEP] Using fallback/empty ruleset for ${tenant}`);
-            }
-
-            const decision = pdp.evaluate(input, activeRuleset);
+            const decision = await engine.evaluate(input, envelopeHash);
 
             span.setAttribute('policy.decision', decision.decision.toUpperCase());
 
@@ -110,7 +107,7 @@ export const policy: Interceptor = async (ctx) => {
                 denyCounter.add(1, {
                     tenant_id: tenant,
                     reason: decision.reason_codes[0],
-                    policy_version: activeRuleset?.version || 'unknown'
+                    policy_version: 'unified-v1'
                 });
 
                 ctx.stepResults.error = {

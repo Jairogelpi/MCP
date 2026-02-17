@@ -2,10 +2,12 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '../app/context/AuthContext';
+import { GATEWAY_URL } from '../lib/config';
 
 interface APIKey {
     key_id: string;
     deployment_name: string;
+    agent_name?: string;
     environment: string;
     scopes: string;
     status: 'active' | 'revoked' | 'rotated';
@@ -23,22 +25,41 @@ export function APIKeysTable({ tenantId, keys, onRefresh }: Props) {
     const { user } = useAuth();
     const [creating, setCreating] = useState(false);
     const [newKeySecret, setNewKeySecret] = useState<string | null>(null);
+    const [agents, setAgents] = useState<{ id: string, name: string }[]>([]);
+    const [selectedAgentId, setSelectedAgentId] = useState<string>('');
+    const [showOptions, setShowOptions] = useState(false);
+
+    const fetchAgents = async () => {
+        try {
+            const res = await fetch(`${GATEWAY_URL}/admin/org/${tenantId}/agents`, {
+                headers: { 'Authorization': `Bearer ${user?.token}` }
+            });
+            const data = await res.json();
+            setAgents(data.agents || []);
+        } catch (err) {
+            console.error('Failed to fetch agents', err);
+        }
+    };
 
     const handleCreateKey = async () => {
-        if (!confirm('Create a new API Key for this organization?')) return;
         setCreating(true);
         try {
-            const res = await fetch('http://localhost:3000/admin/api-keys', {
+            const res = await fetch(`${GATEWAY_URL}/admin/api-keys`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${user?.token}`
                 },
-                body: JSON.stringify({ tenantId })
+                body: JSON.stringify({
+                    tenantId,
+                    agentId: selectedAgentId || undefined
+                })
             });
             const data = await res.json();
             if (data.secret) {
                 setNewKeySecret(data.secret);
+                setSelectedAgentId('');
+                setShowOptions(false);
                 onRefresh();
             }
         } catch (err) {
@@ -51,7 +72,7 @@ export function APIKeysTable({ tenantId, keys, onRefresh }: Props) {
     const handleRevoke = async (keyId: string) => {
         if (!confirm('Are you sure you want to revoke this key?')) return;
         try {
-            await fetch(`http://localhost:3000/admin/api-keys/${keyId}`, {
+            await fetch(`${GATEWAY_URL}/admin/api-keys/${keyId}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${user?.token}` }
             });
@@ -63,15 +84,40 @@ export function APIKeysTable({ tenantId, keys, onRefresh }: Props) {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h3 className="text-xl font-bold text-white uppercase italic tracking-tighter">Credenciales de Acceso</h3>
-                <button
-                    onClick={handleCreateKey}
-                    disabled={creating}
-                    className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest shadow-lg shadow-blue-500/20 disabled:opacity-50"
-                >
-                    {creating ? 'Generando...' : '+ Nueva Key'}
-                </button>
+            <div className="glass p-8 rounded-xl border border-white/5 space-y-6">
+                <div onClick={() => { if (!showOptions) fetchAgents(); setShowOptions(!showOptions); }} className="flex justify-between items-center cursor-pointer group">
+                    <h3 className="text-xl font-black text-white uppercase italic tracking-tighter group-hover:text-blue-400 transition-colors">Generar Nueva Key de Acceso</h3>
+                    <button className={`w-8 h-8 rounded-full border border-white/10 flex items-center justify-center font-bold text-xl transition-all ${showOptions ? 'bg-red-500/20 text-red-400 rotate-45' : 'bg-blue-500/20 text-blue-400'}`}>
+                        +
+                    </button>
+                </div>
+
+                {showOptions && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-white/5 animate-in slide-in-from-top-2 duration-300">
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">Vincular a Agente (Opcional)</label>
+                            <select
+                                className="input-premium bg-[#0a0c10]"
+                                value={selectedAgentId}
+                                onChange={e => setSelectedAgentId(e.target.value)}
+                            >
+                                <option value="">--- Identidad Personal / Global ---</option>
+                                {agents.map(ag => (
+                                    <option key={ag.id} value={ag.id}>{ag.name} ({ag.id})</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex items-end">
+                            <button
+                                onClick={handleCreateKey}
+                                disabled={creating}
+                                className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl text-xs font-black uppercase italic tracking-tighter shadow-lg shadow-blue-500/40 disabled:opacity-50 transition-all active:scale-95"
+                            >
+                                {creating ? 'AUTENTICANDO...' : 'INICIALIZAR SECRETO'}
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {newKeySecret && (
@@ -100,6 +146,7 @@ export function APIKeysTable({ tenantId, keys, onRefresh }: Props) {
                     <thead className="bg-white/5 text-gray-200 text-[10px] uppercase tracking-widest font-bold">
                         <tr>
                             <th className="p-4">Key ID</th>
+                            <th className="p-4">Identity</th>
                             <th className="p-4">Environment</th>
                             <th className="p-4">Status</th>
                             <th className="p-4">Created At</th>
@@ -111,13 +158,18 @@ export function APIKeysTable({ tenantId, keys, onRefresh }: Props) {
                             <tr key={key.key_id} className="hover:bg-white/5 transition-colors">
                                 <td className="p-4 font-mono text-gray-300">{key.key_id}</td>
                                 <td className="p-4">
+                                    <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${key.agent_name ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-gray-800 text-gray-400 border border-white/5'}`}>
+                                        {key.agent_name ? `🤖 ${key.agent_name}` : '👤 Personal'}
+                                    </span>
+                                </td>
+                                <td className="p-4">
                                     <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${key.environment === 'prod' ? 'bg-purple-500/20 text-purple-400' : 'bg-gray-700 text-gray-400'}`}>
                                         {key.environment || 'Global'}
                                     </span>
                                 </td>
                                 <td className="p-4">
                                     <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${key.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' :
-                                            key.status === 'revoked' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'
+                                        key.status === 'revoked' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'
                                         }`}>
                                         {key.status}
                                     </span>

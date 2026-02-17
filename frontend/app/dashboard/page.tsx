@@ -155,14 +155,14 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-4">
                     {user?.role === 'admin' && (
                         <>
+                            <Link href="/dashboard/approvals" className="text-xs font-bold text-yellow-500 hover:text-white transition-colors uppercase tracking-widest bg-yellow-500/10 px-6 py-3 rounded-xl border border-yellow-500/20">
+                                Pendientes
+                            </Link>
                             <Link href="/dashboard/settings" className="text-xs font-bold text-indigo-400 hover:text-white transition-colors uppercase tracking-widest bg-indigo-500/10 px-6 py-3 rounded-xl border border-indigo-500/20">
                                 Gobernanza de IA
                             </Link>
                             <Link href="/dashboard/organization" className="text-xs font-bold text-gray-100 hover:text-white transition-colors uppercase tracking-widest bg-blue-600/20 px-6 py-3 rounded-xl border border-blue-500/30">
                                 Control de Acceso e IAM
-                            </Link>
-                            <Link href="/dashboard/specs" className="text-xs font-bold text-gray-400 hover:text-white transition-colors uppercase tracking-widest px-4 py-3 hover:bg-white/5 rounded-xl">
-                                Contracts
                             </Link>
                         </>
                     )}
@@ -398,6 +398,24 @@ export default function DashboardPage() {
                         </div>
                         <h3 className="text-xl font-bold text-white uppercase italic tracking-tight mb-2">Contract Playground</h3>
                         <p className="text-xs text-gray-500 font-mono">Interactive JSON-RPC builder with AJV schema validation and SSE response visualization.</p>
+                    </Link>
+
+                    <Link href="/dashboard/agents" className="glass p-8 rounded-3xl hover:bg-white/5 transition-all group border border-white/5 hover:border-emerald-500/30">
+                        <div className="flex justify-between items-start mb-4">
+                            <div className="p-4 bg-emerald-600/20 rounded-2xl text-2xl group-hover:scale-110 transition-transform">🤖</div>
+                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest group-hover:text-emerald-400">Autonomous IAM</span>
+                        </div>
+                        <h3 className="text-xl font-bold text-white uppercase italic tracking-tight mb-2">Agents & Entities</h3>
+                        <p className="text-xs text-gray-500 font-mono">Define non-human identities, assign roles, and manage autonomous programmatic access.</p>
+                    </Link>
+
+                    <Link href="/dashboard/policies" className="glass p-8 rounded-3xl hover:bg-white/5 transition-all group border border-white/5 hover:border-blue-500/30">
+                        <div className="flex justify-between items-start mb-4">
+                            <div className="p-4 bg-blue-600/20 rounded-2xl text-2xl group-hover:scale-110 transition-transform">⚖️</div>
+                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest group-hover:text-blue-400">Policy Engine</span>
+                        </div>
+                        <h3 className="text-xl font-bold text-white uppercase italic tracking-tight mb-2">Governance Architect</h3>
+                        <p className="text-xs text-gray-500 font-mono">Design multi-dimensional policies with deterministic evaluation and real-time simulation.</p>
                     </Link>
                 </div>
             </div>

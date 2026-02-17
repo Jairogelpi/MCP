@@ -64,4 +64,17 @@ export function seedEnterpriseIAM() {
     `, ['demo-client', 'u_demo', 'role_admin', 'active', now]);
 
     console.log(`   Demo Key Secret:   ${demoSecret}`);
+
+    // 5. Default Echo Upstream for Zero Friction (Fase 2.9)
+    db.raw.run(`
+        INSERT OR IGNORE INTO upstreams (id, tenant_id, name, base_url, auth_type, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    `, ['u_echo_acme', 'acme', 'Echo Service', 'https://httpbin.org/post', 'none', now]);
+
+    db.raw.run(`
+        INSERT OR IGNORE INTO upstreams (id, tenant_id, name, base_url, auth_type, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    `, ['u_echo_demo', 'demo-client', 'Echo Service', 'https://httpbin.org/post', 'none', now]);
+
+    console.log('[SEED] Default Upstreams created for Zero Friction.');
 }

@@ -44,25 +44,36 @@ export const parseValidate: Interceptor = async (ctx) => {
             span.setAttribute('tenant_id', tenant);
             span.setAttribute('upstream_server', server);
 
-            // 1. Mandatory Metadata (Replay Protection)
-            const { request_id, timestamp } = body;
+            // 1. Optional Metadata (Replay Protection if provided)
+            let { request_id, timestamp } = body;
 
-            if (!request_id || !timestamp) {
-                console.warn('[VALIDATE] Missing request_id or timestamp');
-                throw new Error('MISSING_REPLAY_METADATA');
+            if (!request_id) {
+                request_id = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                console.log(`[VALIDATE] Internal request_id generated: ${request_id}`);
             }
 
-            // A. Duplication Check
-            if (RECENT_REQUESTS.has(request_id)) {
+            if (!timestamp) {
+                timestamp = Date.now();
+            }
+
+            // A. Duplication Check (Only if they provided a real ID)
+            if (body.request_id && RECENT_REQUESTS.has(request_id)) {
                 console.warn(`[VALIDATE] Replay detected for request_id: ${request_id}`);
                 throw new Error('REPLAY_ATTACK_DETECTED');
             }
 
-            // B. Timestamp Drift (Stale Request)
-            const drift = Math.abs(Date.now() - timestamp);
-            if (drift > CLOCK_SKEW_MS) {
-                console.warn(`[VALIDATE] Stale request. Drift: ${drift}ms`);
-                throw new Error('STALE_REQUEST');
+            // B. Timestamp Drift (Only if they provided a real timestamp)
+            if (body.timestamp) {
+                const drift = Math.abs(Date.now() - timestamp);
+                if (drift > CLOCK_SKEW_MS) {
+                    console.warn(`[VALIDATE] Stale request. Drift: ${drift}ms`);
+                    throw new Error('STALE_REQUEST');
+                }
+            }
+
+            // C. Cache Cleanup
+            if (body.request_id) {
+                RECENT_REQUESTS.add(request_id);
             }
 
             // C. Cache Cleanup (Simple LRU logic for MVP)

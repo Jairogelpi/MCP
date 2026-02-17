@@ -7,8 +7,10 @@ export interface Identity {
     userId: string;
     tenantId: string;
     deptId?: string;
+    agentId?: string;
     role: string;
     scopes: string[];
+    environment: 'dev' | 'staging' | 'prod';
 }
 
 export class IdentityManager {
@@ -23,43 +25,54 @@ export class IdentityManager {
      * Authenticates and returns identity from the robust IAM tables.
      */
     static async getIdentity(rawKey: string): Promise<Identity | null> {
-        // Enforce hashed lookup
+        // 1. Enforce hashed lookup
         const keyHash = this.hashKey(rawKey);
 
         const keyRows = await db.raw.query(`
-            SELECT k.*, u.name as user_name 
+            SELECT k.*, d.environment as dep_env
             FROM iam_keys k
-            JOIN iam_users u ON k.user_id = u.user_id
+            LEFT JOIN deployments d ON k.deployment_id = d.id
             WHERE (k.key_hash = ? OR k.key_id = ?) AND k.status = 'active' AND k.expires_at > ?
         `, [keyHash, rawKey, Date.now()]);
 
         const keyRow = keyRows[0];
-
         if (!keyRow) return null;
 
-        // Fetch membership details within the tenant (Role and Department)
-        const membershipRows = await db.raw.query(`
-            SELECT role_id, dept_id, status
-            FROM tenant_members
-            WHERE tenant_id = ? AND user_id = ?
-        `, [keyRow.tenant_id, keyRow.user_id]);
+        let roleId = 'role_viewer';
+        let deptId = undefined;
+        let agentId = keyRow.agent_id || undefined;
+        let env: 'dev' | 'staging' | 'prod' = keyRow.dep_env || 'dev';
 
-        const membership = membershipRows[0];
+        if (agentId) {
+            // Agent Path: Resolve identity from Agent entity
+            const agentRows = await db.raw.query(`
+                SELECT role_id, tenant_id FROM iam_agents WHERE id = ?
+            `, [agentId]);
+            const agent = agentRows[0];
+            if (agent) {
+                roleId = agent.role_id;
+            }
+        } else {
+            // Human Path: Resolve identity from User membership
+            const membershipRows = await db.raw.query(`
+                SELECT role_id, dept_id FROM tenant_members
+                WHERE tenant_id = ? AND user_id = ?
+            `, [keyRow.tenant_id, keyRow.user_id]);
+            const membership = membershipRows[0];
+            if (membership) {
+                roleId = membership.role_id;
+                deptId = membership.dept_id;
+            }
+        }
 
-        // Use organization-specific role if available, fallback to global role
-        const roles = await db.raw.query(`
-            SELECT name 
-            FROM iam_roles 
-            WHERE role_id = ?
-        `, [membership?.role_id || 'role_viewer']);
-
-        // Fetch permissions (scopes) for the roles
+        // Resolving human-readable role name and scopes
+        const roles = await db.raw.query(`SELECT name FROM iam_roles WHERE role_id = ?`, [roleId]);
         const perms = await db.raw.query(`
             SELECT p.scope_name 
             FROM iam_permissions p
             JOIN iam_role_permissions rp ON p.perm_id = rp.perm_id
             WHERE rp.role_id = ?
-        `, [membership?.role_id || 'role_viewer']);
+        `, [roleId]);
 
         const roleName = roles.length > 0 ? roles[0].name.toLowerCase() : 'viewer';
         const scopes = Array.from(new Set([
@@ -70,9 +83,11 @@ export class IdentityManager {
         return {
             userId: keyRow.user_id,
             tenantId: keyRow.tenant_id,
-            deptId: membership?.dept_id || undefined,
+            deptId: deptId || undefined,
+            agentId: agentId,
             role: roleName,
-            scopes: scopes.includes('*') ? ['*'] : scopes
+            scopes: scopes.includes('*') ? ['*'] : scopes,
+            environment: env
         };
     }
 

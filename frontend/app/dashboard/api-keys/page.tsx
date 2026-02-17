@@ -6,6 +6,7 @@ import { useOrganization } from '../../context/OrganizationContext';
 import { APIKeysTable } from '../../../components/APIKeysTable';
 import Link from 'next/link';
 import { QuickstartGenerator } from '../../../components/QuickstartGenerator';
+import { GATEWAY_URL } from '../../../lib/config';
 
 export default function APIKeysPage() {
     const { user } = useAuth();
@@ -24,7 +25,7 @@ export default function APIKeysPage() {
         if (!user || !currentOrg) return;
         setLoading(true);
         try {
-            const res = await fetch(`http://localhost:3000/admin/api-keys/${currentOrg.tenant_id}`, {
+            const res = await fetch(`${GATEWAY_URL}/admin/api-keys/${currentOrg.tenant_id}`, {
                 headers: { 'Authorization': `Bearer ${user.token}` }
             });
             const data = await res.json();
@@ -44,7 +45,7 @@ export default function APIKeysPage() {
     const fetchUpstreams = async () => {
         if (!user || !currentOrg) return;
         try {
-            const res = await fetch(`http://localhost:3000/admin/org/${currentOrg.tenant_id}/upstreams`, {
+            const res = await fetch(`${GATEWAY_URL}/admin/org/${currentOrg.tenant_id}/upstreams`, {
                 headers: { 'Authorization': `Bearer ${user.token}` }
             });
             const data = await res.json();

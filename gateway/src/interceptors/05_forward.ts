@@ -1,11 +1,6 @@
 import { Interceptor } from '../core/pipeline';
 import { Readable } from 'stream';
-
-const UPSTREAM_MAP: Record<string, string> = {
-    'finance-core': 'http://localhost:3001',
-    'network-service': 'http://localhost:3002'
-};
-
+import { db } from '../adapters/database';
 import { trace, SpanStatusCode } from '@opentelemetry/api';
 
 // Circuit Breaker State
@@ -41,12 +36,29 @@ export const forward: Interceptor = async (ctx) => {
             if (!envelope) return;
 
             const targetServer = envelope.meta.targetServer;
+            const tenantId = envelope.meta.tenant;
 
-            // Resolve URL: Prefer context injection (DB), fallback to map (Legacy/Dev)
-            let upstreamUrl = ctx.resolvedUpstream?.url || UPSTREAM_MAP[targetServer];
+            // Resolve URL: Prefer context injection, then DB, then Error
+            let upstreamUrl = ctx.resolvedUpstream?.url;
 
-            // If we have an upstream config but no URL (shouldn't happen if properly typed), fallback
-            if (!upstreamUrl && ctx.resolvedUpstream) upstreamUrl = ctx.resolvedUpstream.url;
+            if (!upstreamUrl) {
+                const results = await db.raw.query(`
+                    SELECT base_url, auth_type, auth_config FROM upstreams 
+                    WHERE tenant_id = ? AND name = ?
+                    LIMIT 1
+                `, [tenantId, targetServer]);
+
+                if (results.length > 0) {
+                    const row = results[0];
+                    upstreamUrl = row.base_url;
+                    ctx.resolvedUpstream = {
+                        url: row.base_url,
+                        authType: row.auth_type,
+                        authConfig: row.auth_config ? JSON.parse(row.auth_config) : null
+                    };
+                    console.log(`[FORWARD] Resolved Dynamic Upstream: ${targetServer} -> ${upstreamUrl} (Tenant: ${tenantId})`);
+                }
+            }
 
             const breaker = getBreaker(targetServer);
 

@@ -1,5 +1,5 @@
 import Ajv from 'ajv';
-import schema from '../public/spec/action_envelope.schema.json';
+import schema from '@spec/action_envelope.schema.json';
 
 const ajv = new Ajv({ allErrors: true });
 const validate = ajv.compile(schema);

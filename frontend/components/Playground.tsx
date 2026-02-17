@@ -13,18 +13,19 @@ interface Props {
 
 export function Playground({ tenantId, upstreams, apiKeys }: Props) {
     const { user } = useAuth();
-    const [selectedUpstream, setSelectedUpstream] = useState(upstreams[0]?.name || '');
-    const [customKey, setCustomKey] = useState('');
+    const defaultUp = upstreams.find(u => (u as any).is_default) || upstreams[0];
+    const [selectedUpstream, setSelectedUpstream] = useState(defaultUp?.name || '');
+    const [customKey, setCustomKey] = useState(apiKeys[0]?.key_id === 'mcp_demo_01' ? 'demo-key' : '');
 
-    // Default valid envelope structure based on schema
+    const [isDiscoveryMode, setIsDiscoveryMode] = useState(true);
     const [requestBody, setRequestBody] = useState(JSON.stringify({
         jsonrpc: "2.0",
         method: "tools/call",
         params: {
-            name: "get_weather",
-            arguments: { city: "Madrid" }
+            name: "echo",
+            arguments: { message: "Hola mundo" }
         },
-        id: 1
+        id: "first-test"
     }, null, 2));
 
     const [validation, setValidation] = useState<{ valid: boolean, errors: string[] }>({ valid: true, errors: [] });
@@ -177,50 +178,77 @@ export function Playground({ tenantId, upstreams, apiKeys }: Props) {
             addLog('error', `Network Error: ${err.message}`);
         } finally {
             setLoading(false);
+            if (isDiscoveryMode) setIsDiscoveryMode(false);
         }
+    };
+
+    // Helper for visual flow steps
+    const renderVisualStep = (log: any) => {
+        let label = "";
+        let icon = "✔";
+        if (log.content?.includes?.('Initializing')) label = "Connection Established";
+        if (log.content?.includes?.('validated')) label = "Contract Validated";
+        if (log.content?.includes?.('Opening connection')) label = "Forwarding to Upstream";
+        if (log.type === 'receipt') label = "Transaction Finalized";
+        if (log.type === 'info' && typeof log.content === 'object' && log.content.result) label = "Response Received";
+
+        if (!label) return null;
+
+        return (
+            <div className="flex items-center gap-2 text-emerald-400 font-bold mb-2 animate-in fade-in slide-in-from-left-2">
+                <span className="bg-emerald-500/10 rounded-full w-5 h-5 flex items-center justify-center text-[10px]">{icon}</span>
+                <span className="uppercase tracking-tighter">{label}</span>
+            </div>
+        );
     };
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[calc(100vh-140px)]">
             {/* Left: Configuration & Input */}
             <div className="flex flex-col gap-4 h-full">
-                <div className="glass p-6 rounded-2xl space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                {isDiscoveryMode ? (
+                    <div className="glass p-8 rounded-3xl space-y-6 bg-blue-600/5 border-blue-500/20 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl">🚀</div>
                         <div>
-                            <label className="text-[10px] font-bold text-gray-500 uppercase">Upstream</label>
-                            <select
-                                className="input-premium w-full"
-                                value={selectedUpstream}
-                                onChange={e => setSelectedUpstream(e.target.value)}
-                            >
-                                {upstreams.map(u => (
-                                    <option key={u.name} value={u.name}>{u.name}</option>
-                                ))}
-                            </select>
+                            <h2 className="text-2xl font-black text-white italic uppercase tracking-tighter mb-2">Ready to Launch</h2>
+                            <p className="text-gray-400 text-sm leading-relaxed">
+                                We've pre-configured a <span className="text-blue-400 font-bold">Mirror Upstream (Echo Service)</span> for you.
+                                Click the button below to see the Gateway in action—no configuration required.
+                            </p>
                         </div>
-                        <div>
-                            <label className="text-[10px] font-bold text-gray-500 uppercase">API Key (Mock/Real)</label>
-                            <input
-                                type="password"
-                                className="input-premium w-full"
-                                placeholder="Paste sk_..."
-                                value={customKey}
-                                onChange={e => setCustomKey(e.target.value)}
-                            />
+                        <div className="flex items-center gap-4 p-4 bg-black/40 rounded-2xl border border-white/5">
+                            <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/20">1</div>
+                            <div className="flex-1">
+                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Selected Upstream</p>
+                                <p className="text-white font-mono text-xs">Echo Service (httpbin.org)</p>
+                            </div>
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-[10px] font-bold text-gray-500 uppercase">Upstream</label>
-                            <select
-                                className="input-premium w-full"
-                                value={selectedUpstream}
-                                onChange={e => setSelectedUpstream(e.target.value)}
-                            >
-                                {upstreams.map(u => (
-                                    <option key={u.name} value={u.name}>{u.name}</option>
-                                ))}
-                            </select>
+                ) : (
+                    <div className="glass p-6 rounded-2xl space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase">Upstream</label>
+                                <select
+                                    className="input-premium w-full"
+                                    value={selectedUpstream}
+                                    onChange={e => setSelectedUpstream(e.target.value)}
+                                >
+                                    {upstreams.map(u => (
+                                        <option key={u.name} value={u.name}>{u.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase">API Key (Mock/Real)</label>
+                                <input
+                                    type="password"
+                                    className="input-premium w-full"
+                                    placeholder="Paste sk_..."
+                                    value={customKey}
+                                    onChange={e => setCustomKey(e.target.value)}
+                                />
+                            </div>
                         </div>
                         <div>
                             <label className="text-[10px] font-bold text-gray-500 uppercase">Transport Mode</label>
@@ -239,25 +267,25 @@ export function Playground({ tenantId, upstreams, apiKeys }: Props) {
                                 </button>
                             </div>
                         </div>
-                    </div>
-                    <div className="space-y-2">
-                        <div className="flex justify-between">
-                            <label className="text-[10px] font-bold text-gray-500 uppercase">Templates</label>
-                            <button onClick={generateCurl} className="text-[10px] text-blue-400 hover:text-blue-300 font-bold uppercase">Copy as Curl</button>
+                        <div className="space-y-2">
+                            <div className="flex justify-between">
+                                <label className="text-[10px] font-bold text-gray-500 uppercase">Templates</label>
+                                <button onClick={generateCurl} className="text-[10px] text-blue-400 hover:text-blue-300 font-bold uppercase">Copy as Curl</button>
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={() => loadTemplate('list_tools')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded text-[10px] font-bold uppercase text-gray-300 border border-white/5">
+                                    🛠️ List Tools
+                                </button>
+                                <button onClick={() => loadTemplate('call_tool')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded text-[10px] font-bold uppercase text-gray-300 border border-white/5">
+                                    📞 Call Tool
+                                </button>
+                                <button onClick={() => loadTemplate('streaming')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded text-[10px] font-bold uppercase text-gray-300 border border-white/5">
+                                    🌊 Streaming
+                                </button>
+                            </div>
                         </div>
-                        <div className="flex gap-2">
-                            <button onClick={() => loadTemplate('list_tools')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded text-[10px] font-bold uppercase text-gray-300 border border-white/5">
-                                🛠️ List Tools
-                            </button>
-                            <button onClick={() => loadTemplate('call_tool')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded text-[10px] font-bold uppercase text-gray-300 border border-white/5">
-                                📞 Call Tool
-                            </button>
-                            <button onClick={() => loadTemplate('streaming')} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded text-[10px] font-bold uppercase text-gray-300 border border-white/5">
-                                🌊 Streaming
-                            </button>
-                        </div>
                     </div>
-                </div>
+                )}
 
                 <div className="flex-1 glass p-0 rounded-2xl flex flex-col overflow-hidden border border-white/5 relative">
                     <div className="px-4 py-2 bg-white/5 border-b border-white/5 flex justify-between items-center">
@@ -282,9 +310,11 @@ export function Playground({ tenantId, upstreams, apiKeys }: Props) {
                     <button
                         onClick={handleSend}
                         disabled={!validation.valid || loading || !selectedUpstream}
-                        className="absolute bottom-4 right-4 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-8 rounded-xl shadow-xl shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
+                        className={`absolute bottom-4 right-4 font-black py-4 px-10 rounded-2xl shadow-xl transition-all active:scale-95 disabled:opacity-50
+                            ${isDiscoveryMode ? 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-emerald-500/20' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/20'}
+                        `}
                     >
-                        {loading ? 'Processing...' : 'SEND REQUEST ▶'}
+                        {loading ? 'Synthesizing...' : isDiscoveryMode ? 'RUN FIRST TEST ⚡' : 'SEND REQUEST ▶'}
                     </button>
                 </div>
             </div>
@@ -295,40 +325,43 @@ export function Playground({ tenantId, upstreams, apiKeys }: Props) {
                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Execution Trace</span>
                     <button onClick={() => setLogs([])} className="text-[10px] text-gray-500 hover:text-white uppercase">Clear</button>
                 </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 font-mono text-xs scroll-smooth bg-[#0a0c10]">
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 font-mono text-xs scroll-smooth bg-[#0a0c10]">
                     {logs.length === 0 && (
-                        <div className="h-full flex flex-col items-center justify-center text-gray-700 space-y-2 opacity-50">
-                            <div className="text-4xl">⚡</div>
-                            <p className="uppercase tracking-widest font-bold">Ready to Trace</p>
+                        <div className="h-full flex flex-col items-center justify-center text-gray-700 space-y-3 opacity-50">
+                            <div className="text-6xl animate-pulse">⚡</div>
+                            <p className="uppercase tracking-[0.3em] font-black text-[10px]">Awaiting Signal</p>
                         </div>
                     )}
                     {logs.map((log, i) => (
-                        <div key={i} className={`p-3 rounded border animate-in fade-in slide-in-from-bottom-2 duration-300
-                            ${log.type === 'info' ? 'bg-blue-900/10 border-blue-500/10 text-blue-300' :
-                                log.type === 'error' ? 'bg-red-900/10 border-red-500/20 text-red-400' :
-                                    log.type === 'receipt' ? 'bg-emerald-900/10 border-emerald-500/30 text-emerald-300' :
-                                        'bg-gray-800/30 border-white/5 text-gray-300 border-l-4 border-l-purple-500' // chunk
-                            }`}>
-                            <div className="flex justify-between items-start mb-1 opacity-50 text-[10px]">
-                                <span className="uppercase font-bold">{log.type}</span>
-                                <span>{new Date(log.time).toISOString().split('T')[1].replace('Z', '')}</span>
-                            </div>
-                            {log.type === 'receipt' ? (
-                                <div>
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className="text-xl">🧾</span>
-                                        <span className="font-bold uppercase tracking-wider text-emerald-400">Cryptographic Receipt</span>
-                                    </div>
-                                    <pre className="whitespace-pre-wrap overflow-x-auto text-[10px] opacity-80">
-                                        {JSON.stringify(log.content, null, 2)}
-                                    </pre>
+                        <React.Fragment key={i}>
+                            {renderVisualStep(log)}
+                            <div className={`p-4 rounded-xl border animate-in fade-in slide-in-from-bottom-2 duration-300
+                                ${log.type === 'info' ? 'bg-blue-900/5 border-blue-500/10 text-blue-300' :
+                                    log.type === 'error' ? 'bg-red-900/10 border-red-500/20 text-red-400' :
+                                        log.type === 'receipt' ? 'bg-emerald-900/5 border-emerald-500/20 text-emerald-300 shadow-lg shadow-emerald-500/5' :
+                                            'bg-gray-800/20 border-white/5 text-gray-300 border-l-4 border-l-purple-500' // chunk
+                                }`}>
+                                <div className="flex justify-between items-start mb-2 opacity-30 text-[9px]">
+                                    <span className="uppercase font-black tracking-widest">{log.type}</span>
+                                    <span>{new Date(log.time).toISOString().split('T')[1].replace('Z', '')}</span>
                                 </div>
-                            ) : (
-                                <pre className="whitespace-pre-wrap overflow-x-auto">
-                                    {typeof log.content === 'string' ? log.content : JSON.stringify(log.content, null, 2)}
-                                </pre>
-                            )}
-                        </div>
+                                {log.type === 'receipt' ? (
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <span className="text-xl">🧾</span>
+                                            <span className="font-black uppercase tracking-widest text-emerald-400">Cryptographic Receipt</span>
+                                        </div>
+                                        <pre className="whitespace-pre-wrap overflow-x-auto text-[10px] opacity-70 leading-relaxed">
+                                            {JSON.stringify(log.content, null, 2)}
+                                        </pre>
+                                    </div>
+                                ) : (
+                                    <pre className="whitespace-pre-wrap overflow-x-auto leading-relaxed">
+                                        {typeof log.content === 'string' ? log.content : JSON.stringify(log.content, null, 2)}
+                                    </pre>
+                                )}
+                            </div>
+                        </React.Fragment>
                     ))}
                     {loading && (
                         <div className="flex justify-center py-4">

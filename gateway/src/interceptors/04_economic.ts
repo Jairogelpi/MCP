@@ -27,12 +27,16 @@ export const economic: Interceptor = async (ctx) => {
             scopes.push(`tenant:${tenant}`);
 
             // 2. Evaluate
+            const policyDecision = ctx.stepResults.policy;
+            const costOverrides = policyDecision?.constraints?.cost_overrides;
+
             const decision = await decider.evaluate({
                 tenant_id: tenant,
                 budget_scopes: scopes,
                 tool_name: envelope.action,
                 args: envelope.parameters,
-                pricing_context: { provider: 'dynamic' } // Let the decider resolve from DB
+                pricing_context: { provider: 'dynamic' }, // Let the decider resolve from DB
+                cost_overrides: costOverrides
             });
 
             console.log(`[ECON] Outcome: ${decision.outcome}, Cost: ${decision.estimated_cost.toFixed(4)} ${decision.currency}, Reason: ${decision.reason_codes.join(',')}`);

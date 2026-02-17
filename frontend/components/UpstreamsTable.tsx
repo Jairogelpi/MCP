@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '../app/context/AuthContext';
+import { GATEWAY_URL } from '../lib/config';
 
 interface Upstream {
     id: string;
@@ -20,6 +21,8 @@ interface Props {
 export function UpstreamsTable({ tenantId, upstreams, onRefresh }: Props) {
     const { user } = useAuth();
     const [creating, setCreating] = useState(false);
+    const [testingId, setTestingId] = useState<string | null>(null);
+    const [testResults, setTestResults] = useState<Record<string, any>>({});
 
     // Form state
     const [name, setName] = useState('');
@@ -32,7 +35,7 @@ export function UpstreamsTable({ tenantId, upstreams, onRefresh }: Props) {
         e.preventDefault();
         setCreating(true);
         try {
-            await fetch('http://localhost:3000/admin/upstreams', {
+            await fetch(`${GATEWAY_URL}/admin/upstreams`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -66,13 +69,38 @@ export function UpstreamsTable({ tenantId, upstreams, onRefresh }: Props) {
     const handleDelete = async (id: string) => {
         if (!confirm('Delete this upstream? It will break any routes using it.')) return;
         try {
-            await fetch(`http://localhost:3000/admin/upstreams/${id}`, {
-                method: 'DELETE',
+            await fetch(`${GATEWAY_URL}/admin/upstreams/${id}`, {
                 headers: { 'Authorization': `Bearer ${user?.token}` }
             });
             onRefresh();
         } catch (err) {
-            alert('Failed to delete upstream');
+        }
+    };
+
+    const handleTest = async (up: Upstream) => {
+        setTestingId(up.id);
+        setTestResults(prev => ({ ...prev, [up.id]: { loading: true } }));
+        try {
+            const res = await fetch(`${GATEWAY_URL}/admin/upstreams/test`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user?.token}`
+                },
+                body: JSON.stringify({
+                    baseUrl: up.base_url,
+                    authType: up.auth_type,
+                    // Note: This won't send the real secret if it's not stored in 'up' object in list,
+                    // but the backend will handle that if we pass the id, or we just test public connectivity.
+                    // For now, testing public or just existence.
+                })
+            });
+            const data = await res.json();
+            setTestResults(prev => ({ ...prev, [up.id]: { loading: false, ...data } }));
+        } catch (err: any) {
+            setTestResults(prev => ({ ...prev, [up.id]: { loading: false, success: false, error: err.message } }));
+        } finally {
+            setTestingId(null);
         }
     };
 
@@ -184,10 +212,22 @@ export function UpstreamsTable({ tenantId, upstreams, onRefresh }: Props) {
                                     </span>
                                 </td>
                                 <td className="p-4 text-xs font-mono">{new Date(up.created_at).toLocaleDateString()}</td>
-                                <td className="p-4 text-right">
+                                <td className="p-4 text-right space-x-2">
+                                    <button
+                                        onClick={() => handleTest(up)}
+                                        disabled={testingId === up.id}
+                                        className={`px-2 py-1 rounded text-[10px] font-bold uppercase transition-colors ${testResults[up.id]?.success ? 'text-emerald-400 bg-emerald-500/10' :
+                                            testResults[up.id]?.success === false ? 'text-red-400 bg-red-500/10' :
+                                                'text-blue-400 hover:bg-blue-500/20'
+                                            }`}
+                                    >
+                                        {testingId === up.id ? 'Testing...' :
+                                            testResults[up.id]?.success ? '✔ Online' :
+                                                testResults[up.id]?.success === false ? '✘ Offline' : 'Test'}
+                                    </button>
                                     <button
                                         onClick={() => handleDelete(up.id)}
-                                        className="text-red-400 hover:text-white hover:bg-red-500/20 px-2 py-1 rounded text-[10px] font-bold uppercase transition-colors"
+                                        className="text-gray-500 hover:text-white hover:bg-red-500/20 px-2 py-1 rounded text-[10px] font-bold uppercase transition-colors"
                                     >
                                         Disconnect
                                     </button>

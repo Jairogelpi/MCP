@@ -93,6 +93,7 @@ export interface ABACRule {
     // Predicates (ALL must match if present)
     when: {
         role?: string[]; // e.g. ["admin", "developer"]
+        agent_id?: string[]; // e.g. ["ag_123"]
         tool_name?: string | { pattern: string }; // e.g. "transfer_*"
         risk_class?: 'low' | 'medium' | 'high' | 'critical';
         time_restricted?: { start: string; end: string }; // HH:MM
@@ -132,20 +133,20 @@ export interface PolicyInput {
     project_id?: string;
     environment?: 'dev' | 'staging' | 'prod';
     mcp_method?: string; // e.g. tools/call
+    resource?: string; // Generic resource (e.g. model_id, table_name, bucket)
 
     // Legacy/Optional fields
     session_id?: string;
 }
 
 export interface PolicyDecision {
-    decision: RuleEffect;
-    reason_codes: string[]; // Minimum 1
-    transform_patch?: any; // Generic patch
-    obligations?: string[];
-
-    allow?: boolean;
-    transform?: ActionEnvelope;
-    matchedRuleId?: string;
+    decision: 'allow' | 'deny' | 'transform';
+    reason_codes: string[];
+    matchedRuleId: string;
+    transform_patch?: any; // If transform
+    transform?: ActionEnvelope; // Resulting envelope
+    decision_id?: string; // e.g. approval_request_id
+    constraints?: any; // Raw constraints from the matched rule
 }
 
 // ---------------------------
@@ -176,6 +177,8 @@ export interface Receipt {
     details?: Partial<UpstreamResponse> & { economic?: any }; // Allow economic details
     cost: number;
     timestamp: number;
+    policy_version?: string;
+    envelope_hash?: string;
 }
 
 export interface PipelineContext {
@@ -215,4 +218,27 @@ export interface PipelineContext {
         authType?: string;
         authConfig?: any;
     };
+}
+// --- SIMPLIFIED GOVERNANCE (PHASE 8) ---
+
+export interface AgentPolicyConfig {
+    agent_id: string;
+    mode: 'open' | 'budget' | 'strict' | 'high_security';
+    allowed_upstreams?: string[]; // IDs
+    allowed_actions?: string[]; // Tool names
+    allowed_resources?: string[]; // Generic resource identifiers (e.g. models, datasets, buckets)
+    daily_budget?: number;
+    monthly_budget?: number;
+    hard_cap?: boolean;
+    require_approval_actions?: boolean;
+    approval_threshold?: number; // Cost threshold
+    require_approval_prod?: boolean;
+    requests_per_minute?: number;
+    parameter_constraints?: Record<string, {
+        min?: number;
+        max?: number;
+        enum?: any[];
+        pattern?: string;
+    }>;
+    cost_overrides?: Record<string, number>; // Action name -> Fixed cost
 }

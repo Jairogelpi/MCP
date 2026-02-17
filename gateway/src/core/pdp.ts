@@ -64,6 +64,11 @@ export class PDP {
             if (!input.role || !when.role.includes(input.role)) return false;
         }
 
+        // 2.1 Agent ID (Phase 4)
+        if (when.agent_id && when.agent_id.length > 0) {
+            if (!input.agent_id || !when.agent_id.includes(input.agent_id)) return false;
+        }
+
         // 3. Risk Class
         if (when.risk_class) {
             if (input.risk_class !== when.risk_class) return false;

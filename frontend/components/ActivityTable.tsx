@@ -12,6 +12,8 @@ interface ActivityItem {
     error_code?: string;
     latency?: number;
     hash: string;
+    envelope_hash?: string;
+    policy_version?: string;
 }
 
 interface Props {
@@ -27,9 +29,10 @@ export function ActivityTable({ activities }: Props) {
                         <th className="p-4">Time</th>
                         <th className="p-4">Action / Tool</th>
                         <th className="p-4">Status</th>
+                        <th className="p-4">Policy v.</th>
                         <th className="p-4">Latency</th>
                         <th className="p-4">Cost</th>
-                        <th className="p-4">Receipt Hash</th>
+                        <th className="p-4">Envelope Hash</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -44,14 +47,17 @@ export function ActivityTable({ activities }: Props) {
                             <td className="p-4">
                                 <ActivityStatus status={item.status} errorCode={item.error_code} />
                             </td>
+                            <td className="p-4 font-mono text-[10px] text-indigo-400">
+                                {item.policy_version || 'v1.0'}
+                            </td>
                             <td className="p-4 font-mono text-xs">
                                 {item.latency ? <span className={item.latency > 1000 ? 'text-yellow-400' : 'text-emerald-400'}>{item.latency}ms</span> : '-'}
                             </td>
                             <td className="p-4 font-mono text-xs text-blue-300">
                                 {item.cost > 0 ? `€${item.cost.toFixed(4)}` : '-'}
                             </td>
-                            <td className="p-4 font-mono text-[10px] text-gray-600 truncate max-w-[100px]" title={item.hash}>
-                                {item.hash.substring(0, 12)}...
+                            <td className="p-4 font-mono text-[10px] text-gray-600 truncate max-w-[120px]" title={item.envelope_hash || item.hash}>
+                                {item.envelope_hash ? `sha256:${item.envelope_hash.substring(0, 8)}...` : item.hash.substring(0, 12) + '...'}
                             </td>
                         </tr>
                     ))}

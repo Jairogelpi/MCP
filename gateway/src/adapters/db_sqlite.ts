@@ -40,7 +40,11 @@ export class SqliteAdapter implements DatabaseAdapter {
             { name: '021_deployments', path: path.resolve(__dirname, '../../migrations/021_deployments.sql') },
             { name: '022_upstreams', path: path.resolve(__dirname, '../../migrations/022_upstreams.sql') },
             { name: '023_tool_catalog', path: path.resolve(__dirname, '../../migrations/023_tool_catalog.sql') },
-            { name: '024_policy_rulesets', path: path.resolve(__dirname, '../../migrations/024_policy_rulesets.sql') }
+            { name: '024_policy_rulesets', path: path.resolve(__dirname, '../../migrations/024_policy_rulesets.sql') },
+            { name: '025_upstream_default', path: path.resolve(__dirname, '../../migrations/025_upstream_default.sql') },
+            { name: '026_iam_agents', path: path.resolve(__dirname, '../../migrations/026_iam_agents.sql') },
+            { name: '027_enterprise_governance', path: path.resolve(__dirname, '../../migrations/027_enterprise_governance.sql') },
+            { name: '028_agent_governance_intent', path: path.resolve(__dirname, '../../migrations/028_agent_governance_intent.sql') }
         ];
 
         for (const m of migrations) {
@@ -104,17 +108,19 @@ export class SqliteAdapter implements DatabaseAdapter {
         },
         storeReceipt: async (receipt: any, hash: string, signature: string) => {
             this.sqlite.prepare(`
-                INSERT INTO ledger_receipts (receipt_id, tenant_id, request_id, created_at, receipt_json, hash, prev_hash, signature)
-                VALUES (@receipt_id, @tenant_id, @request_id, @created_at, @json, @hash, @prev_hash, @signature)
+                INSERT INTO ledger_receipts (receipt_id, tenant_id, request_id, created_at, receipt_json, hash, prev_hash, signature, envelope_hash, policy_version)
+                VALUES (@receipt_id, @tenant_id, @request_id, @created_at, @json, @hash, @prev_hash, @signature, @envelope_hash, @policy_version)
             `).run({
-                receipt_id: receipt.receipt_id,
-                tenant_id: receipt.meta.tenant_id,
-                request_id: receipt.request_id,
-                created_at: new Date(receipt.timestamps.created_at).getTime(),
+                receipt_id: receipt.receipt_id || receipt.transactionId,
+                tenant_id: receipt.meta?.tenant_id || receipt.details?.economic?.tenant_id || '',
+                request_id: receipt.request_id || receipt.transactionId,
+                created_at: receipt.timestamp || Date.now(),
                 json: JSON.stringify(receipt),
                 hash,
-                prev_hash: receipt.proof.prev_receipt_hash,
-                signature
+                prev_hash: receipt.proof?.prev_receipt_hash || '',
+                signature,
+                envelope_hash: receipt.envelope_hash || '',
+                policy_version: receipt.policy_version || 'unknown'
             });
         }
     };
